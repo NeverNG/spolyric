@@ -107,6 +107,40 @@ test('a romanised artist with an exact title and duration is accepted', async ()
     }
 });
 
+test('KuGou album art is used for a version iTunes does not list', async () => {
+    const temp = makeTempDir();
+    try {
+        const resolver = createCoverResolver({
+            cacheDir: temp.dir,
+            log: silentLogger(),
+            server: fakeCoverServer(),
+            fetchJsonImpl: async url => {
+                if (url.includes('song_search_v2')) {
+                    return {
+                        body: {
+                            data: {
+                                lists: [{
+                                    SongName: 'X',
+                                    SingerName: 'Y',
+                                    Duration: 200,
+                                    Image: 'http://imge.kugou.com/stdmusic/{size}/cover.jpg',
+                                }],
+                            },
+                        },
+                    };
+                }
+                return { body: { data: [], results: [] } };
+            },
+            fetchBytesImpl: bytes,
+        });
+        const cover = await resolver.get(track);
+        assert.equal(cover?.source, 'kugou');
+        assert.ok(cover?.url.startsWith('http://127.0.0.1:9/cover/'));
+    } finally {
+        temp.cleanup();
+    }
+});
+
 test('a wrong artist is not accepted', async () => {
     const temp = makeTempDir();
     try {

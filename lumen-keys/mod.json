@@ -2,9 +2,9 @@
   "folium": 1,
   "id": "lumen-keys",
   "name": "流光琴键",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "author": "Spolyric",
-  "description": "看不见的纵向轨迹、两列固定琴键、玻璃球下落撞击：压扁回弹、琴键后退、火花与冲击环。",
+  "description": "立体墙面上的长方体琴键，背面固定、朝观众伸出；玻璃球作为刚体下落撞击，琴键绕固定边震动。",
   "client": "client.mjs",
   "preview": "preview.jpg",
   "folia": ">=0.8.0 <0.9.0"

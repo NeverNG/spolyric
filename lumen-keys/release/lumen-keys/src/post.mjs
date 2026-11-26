@@ -81,7 +81,8 @@ void main() {
     float grain = hash21(vUv * vec2(1920.0, 1080.0) + floor(uTime * 30.0));
     col += (grain - 0.5) * uGrain;
 
-    gl_FragColor = vec4(max(col, 0.0), 1.0);
+    col = pow(max(col, 0.0), vec3(1.0 / 2.2));
+    gl_FragColor = vec4(col, 1.0);
 }
 `;
 
@@ -126,7 +127,7 @@ export const createPost = ({ renderer, width, height, quality = 1 }) => {
 
     const bright = makeQuadScene(brightFragment, {
         tScene: { value: sceneTarget.texture },
-        uThreshold: { value: 0.90 },
+        uThreshold: { value: 0.70 },
     });
     const blur = makeQuadScene(blurFragment, {
         tMap: { value: brightTarget.texture },
@@ -183,7 +184,7 @@ export const createPost = ({ renderer, width, height, quality = 1 }) => {
             blur.material.uniforms.uDir.value.set(0, (texelY / bloomScale) * 1.4);
             pass(blur.material, blur.scene, blurTargetB);
 
-            composite.material.uniforms.uBloom.value = 0.22 * bloom;
+            composite.material.uniforms.uBloom.value = 0.24 * bloom;
             composite.material.uniforms.uTime.value = time;
             composite.material.uniforms.uChorus.value = chorus;
             composite.material.uniforms.uGrain.value = 0.02 * grain;

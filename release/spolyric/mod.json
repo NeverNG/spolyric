@@ -3,7 +3,7 @@
   "folia": ">=0.8.0",
   "id": "spolyric",
   "name": "Spolyric — 免费 Spotify 跟随",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "author": "Spolyric",
   "description": "免费 Spotify 账号也能用的 Folia 舞台跟随器：读取 Windows 上 Spotify 桌面端正在播放的歌，把歌名、歌手、封面、进度和歌词送进 Folia 舞台。不需要会员，也不用在模组里登录 Spotify；它不播放音频，只做跟随。必须打开「舞台模式」并把来源选为 Stage API，普通播放页不显示；它和 Folia 内置的 Spotify 音源不是一回事。",
   "main": "main.cjs",

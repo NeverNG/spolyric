@@ -193,7 +193,7 @@ src/main.ts
 
 ## 9. 测试策略
 
-- `node:test`，编译后跑 `dist/test/*.test.js`（`npm test`，168 个用例）。
+- `node:test`，编译后跑 `dist/test/*.test.js`（`npm test`，169 个用例）。
 - 假件在 `test/helpers/fakes.ts`：假 Stage（记录会话/时钟/清空、可注入 409 与标题）、假播放器（可变快照）、假歌词（可 gate 住，模拟「歌词后到」）、手动时钟。
 - 纯函数单测：PKCE、LRC 生成/校验、条目归一化、配置夹取、路径发现、连接文件解析（含 JSON `null` / 数组）、代理解析、SMTC 输出行解析。
 - 协议单测：`src/folia/stage.ts`、`src/spotify/player.ts`、`src/http.ts` 跑在真的 loopback HTTP 服务上（`test/helpers/server.ts`），检查方法、Authorization、请求体、错误码、标题解析、403 回退、错误正文里的 Spotify 原话。
@@ -219,7 +219,7 @@ Windows PowerShell 5.1 读 `.ps1` 时，没有 BOM 就按 **ANSI（中文系统�
 ## 10. 已知缺口与后续
 
 1. **逐字歌词**：Spotify 的 `SYLLABLE_SYNCED` 可以转 enhanced LRC（`<mm:ss.xx>`），Folia 舞台也接受 `formatHint: 'enhanced-lrc'`。但 Spotify 的逐字数据并非每首都有、边界也不稳定，先把逐行做准。要做的话在 `src/spotify/lyrics.ts` 增加一个按行组装的函数，并在配置里加开关。
-2. **local 模式的封面**：SMTC 的 `Thumbnail` 在 PowerShell 5.1 里拿不到（`AsStreamForRead` 扩展方法与 `DataReader` 构造都不行；用 `csc` 引用 `Windows.Media.winmd` + `System.Runtime` facade 的方案在 `RequestAsync` 上会卡住）。现在的做法是 `src/cover/resolver.ts`：按标题 + 歌手 + 时长，并行查 iTunes、QQ 音乐（专辑 mid）与 Deezer，取第一个匹配（标题必须一致，歌手或时长至少一项对得上），下载后缓存到 `%APPDATA%\Spolyric\covers\`，再由 `src/cover/server.ts` 的 loopback 服务以 `http://127.0.0.1:<port>/cover/<key>.jpg` 提供给 Folia（Stage API 拒绝 data URL，只收 http(s)）。代价是冷门曲目可能匹配不到，且封面来自目录而不是 Spotify 本身。
+2. **local 模式的封面**：SMTC 的 `Thumbnail` 在 PowerShell 5.1 里拿不到（`AsStreamForRead` 扩展方法与 `DataReader` 构造都不行；用 `csc` 引用 `Windows.Media.winmd` + `System.Runtime` facade 的方案在 `RequestAsync` 上会卡住）。现在的做法是 `src/cover/resolver.ts`：按标题 + 歌手 + 时长，并行查 iTunes、QQ 音乐（专辑 mid）、酷狗（`Image`，按 `{size}` 换尺寸）与 Deezer，取第一个匹配（标题必须一致，歌手或时长至少一项对得上），下载后缓存到 `%APPDATA%\Spolyric\covers\`，再由 `src/cover/server.ts` 的 loopback 服务以 `http://127.0.0.1:<port>/cover/<key>.jpg` 提供给 Folia（Stage API 拒绝 data URL，只收 http(s)）。代价是冷门曲目可能匹配不到，且封面来自目录而不是 Spotify 本身。
 3. **免费账号的本机播放控制**：播放/暂停/拖动已经接通（§4.5，SMTC）。上一首/下一首在 Folia 的 stage-session 上下文里被关掉了（`controlCapabilities.previous/next = false`），已用 `spolyric key next|prev` 和模组的全局快捷键（`Ctrl+Alt+←/→`）绕过。控制脚本是常驻的：第一条命令约 0.4 秒，之后几毫秒；实测舞台暂停到 Spotify 暂停约 2 秒（大头是 Folia 每秒发布一次舞台状态和 Spotify 自己的 SMTC 更新）。
 4. **Now Playing WebSocket 后端**：如果希望 Folia 设置里直接选「Now Playing」而不是「Stage API」，可以实现它的 `ws://localhost:9863/api/ws/lyric` 服务端（协议见 `reference/folia/src/services/nowPlayingProvider.ts`）。代价是自己写 WebSocket 帧处理，收益只是少两个开关。
 5. **多份 Folia**：连接文件里带 `pid`，目前只用第一个找到的；多份安装时用 `--connection` 指定。

@@ -180,7 +180,7 @@ Spolyric 只清空**自己推的那次会话**；舞台被别人接手时会退�
 
 - `local`：PowerShell 读 SMTC（`src/media/readSession.ps1`），得到标题、歌手、专辑、时长、进度和播放状态；只认 `app` 里带 `Spotify` 的会话，别的播放器不抢舞台。
 - `web`：`GET /v1/me/player`，403 时再试 `/v1/me/player/currently-playing`；仍然 403 就把 Spotify 的原话带进日志。
-- 封面：`web` 用 Spotify 自带封面；`local` 的 SMTC 拿不到缩略图（PowerShell 5.1 的 WinRT 投影限制），改为按 **标题 + 歌手 + 时长** 在 iTunes / QQ 音乐 / Deezer 里匹配（QQ 用专辑 mid 取同一张专辑图，中文歌命中率高），下载后由 Spolyric 起一个**只监听 `127.0.0.1` 的小 HTTP 服务**提供 http 地址（Folia 只接受 http(s) 封面，且它自己不用联外网）。匹配很谨慎：标题要一致，歌手或时长至少一项对得上；匹配不到就不放封面，不瞎配。封面缓存在 `%APPDATA%\Spolyric\covers\`。
+- 封面：`web` 用 Spotify 自带封面；`local` 的 SMTC 拿不到缩略图（PowerShell 5.1 的 WinRT 投影限制），改为按 **标题 + 歌手 + 时长** 在 iTunes / QQ 音乐 / 酷狗 / Deezer 里匹配（QQ 用专辑 mid，酷狗用专辑图，中文歌和特殊版本命中率高），下载后由 Spolyric 起一个**只监听 `127.0.0.1` 的小 HTTP 服务**提供 http 地址（Folia 只接受 http(s) 封面，且它自己不用联外网）。匹配很谨慎：标题要一致，歌手或时长至少一项对得上；匹配不到就不放封面，不瞎配。封面缓存在 `%APPDATA%\Spolyric\covers\`。
 - 歌词：**首选源优先，其余按 Folia 的顺序**。首选源默认 `qq`（和 Folia 默认一致），也可以设成 `netease` / `kugou` / `spotify` / `lrclib`；顺序是「首选源 → 网易云 → QQ → 酷狗 → Spotify → LRCLIB」，第一个有匹配的就用。匹配前会把**繁体转成简体**（OpenCC 表），所以 Spotify 的 `白樺林 / 朴樹` 也能对上 `白桦林 / 朴树`；都没有就只显示曲目，不编造。
   来源可关：`--lyrics spotify,netease,qq,kugou,lrclib` 任选；`--prefer kugou` 或 `SPOLYRIC_PREFER=netease` 调优先级。
 - 歌词缓存：`%APPDATA%\Spolyric\lyrics-cache\`；只有所有来源都明确说「没有」才缓存这个结论（6 小时），网络错误不缓存。
@@ -304,7 +304,7 @@ npm run mod      # 生成 dist-mod/spolyric/ 和 dist-mod/spolyric.zip
 
 ```powershell
 npm run build     # tsc → dist/，并把 readSession.ps1 复制过去
-npm test          # node:test，168 个用例（含真 socket、代理隧道与假 SMTC 的测试）
+npm test          # node:test，169 个用例（含真 socket、代理隧道与假 SMTC 的测试）
 npm run mod       # 打包成 Folia 模组（dist-mod/spolyric）
 npm run check     # build + test
 ```

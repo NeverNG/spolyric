@@ -51,6 +51,20 @@ const makeWallTexture = (palette) => {
     gradient.addColorStop(1, '#5d6d90');
     context.fillStyle = gradient;
     context.fillRect(0, 0, 512, 1024);
+    context.strokeStyle = 'rgba(35,45,70,0.10)';
+    context.lineWidth = 2;
+    for (let x = 0; x <= 512; x += 128) {
+        context.beginPath();
+        context.moveTo(x, 0);
+        context.lineTo(x, 1024);
+        context.stroke();
+    }
+    for (let y = 0; y <= 1024; y += 256) {
+        context.beginPath();
+        context.moveTo(0, y);
+        context.lineTo(512, y);
+        context.stroke();
+    }
     for (let index = 0; index < 2600; index += 1) {
         const alpha = Math.random() * 0.05;
         context.fillStyle = `rgba(255,255,255,${alpha})`;

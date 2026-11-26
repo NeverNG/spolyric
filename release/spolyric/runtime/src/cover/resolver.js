@@ -193,6 +193,49 @@ export function createCoverResolver({ cacheDir, log, server, fetchJsonImpl = fet
         log.info(`cover: qq (${best.title})`);
         return publish(cacheKey(track), image, 'qq');
     };
+    // KuGou's search result carries an album image host for the exact version (e.g. a 空灵女版 remix
+    // that iTunes and QQ do not list), which is what makes Chinese covers actually show up.
+    const fromKugou = async (track) => {
+        const keyword = [toSimplified(track.title), toSimplified(track.artists[0] ?? '')].filter(Boolean).join(' ');
+        if (!keyword)
+            return null;
+        const search = new URLSearchParams({
+            keyword,
+            page: '1',
+            pagesize: '8',
+            platform: 'WebFilter',
+            userid: '-1',
+            clientver: '2000',
+            iscorrection: '1',
+            privilege_filter: '0',
+        });
+        const answer = await fetchJsonImpl(`https://songsearch.kugou.com/song_search_v2?${search.toString()}`, {
+            timeoutMs: 6000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+            },
+        }).catch(error => {
+            log.debug('kugou cover search failed', error);
+            return { body: null };
+        });
+        const candidates = (answer.body?.data?.lists ?? [])
+            .filter(song => typeof song.Image === 'string' && song.Image.includes('{size}'))
+            .map(song => ({
+            title: typeof song.SongName === 'string' ? song.SongName : '',
+            artist: typeof song.SingerName === 'string' ? song.SingerName : '',
+            durationMs: Math.round((Number(song.Duration) || 0) * 1000),
+            imageUrl: String(song.Image).replace('{size}', '500').replace(/^http:/, 'https:'),
+            source: 'kugou',
+        }));
+        const best = pick(candidates, track, 'kugou');
+        if (!best)
+            return null;
+        const image = await download(best.imageUrl);
+        if (!image)
+            return null;
+        log.info(`cover: kugou (${best.title})`);
+        return publish(cacheKey(track), image, 'kugou');
+    };
     const inflight = new Map();
     return {
         async get(track) {
@@ -205,7 +248,7 @@ export function createCoverResolver({ cacheDir, log, server, fetchJsonImpl = fet
             if (running)
                 return running;
             const lookup = new Promise(resolve => {
-                let pending = 3;
+                let pending = 4;
                 let settled = false;
                 const finish = (cover) => {
                     pending -= 1;
@@ -223,6 +266,7 @@ export function createCoverResolver({ cacheDir, log, server, fetchJsonImpl = fet
                 fromDeezer(track).then(finish, () => finish(null));
                 fromItunes(track).then(finish, () => finish(null));
                 fromQq(track).then(finish, () => finish(null));
+                fromKugou(track).then(finish, () => finish(null));
             })
                 .then(cover => {
                 if (!cover) {

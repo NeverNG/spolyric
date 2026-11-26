@@ -15,7 +15,7 @@ import type { CoverServer } from './server.js';
 export type CoverResult = {
     /** An http URL on the loopback cover server (`127.0.0.1`). */
     url: string;
-    source: 'deezer' | 'itunes' | 'qq' | 'cache';
+    source: 'deezer' | 'itunes' | 'qq' | 'kugou' | 'cache';
 };
 
 export type CoverResolver = {
@@ -44,7 +44,7 @@ type Candidate = {
     artist: string;
     durationMs: number;
     imageUrl: string;
-    source: 'deezer' | 'itunes' | 'qq';
+    source: 'deezer' | 'itunes' | 'qq' | 'kugou';
 };
 
 type QqCoverSong = {
@@ -142,7 +142,7 @@ export function createCoverResolver({
     };
 
     /** Starts the loopback server (once) and returns the URL Folia can fetch. */
-    const publish = async (key: string, image: Image, source: 'deezer' | 'itunes' | 'qq'): Promise<CoverResult> => {
+    const publish = async (key: string, image: Image, source: 'deezer' | 'itunes' | 'qq' | 'kugou'): Promise<CoverResult> => {
         writeCache(key, image, source);
         await server.start();
         return { url: server.urlFor(key), source };
@@ -164,7 +164,7 @@ export function createCoverResolver({
     const pick = (
         candidates: Candidate[],
         track: NowPlayingTrack,
-        source: 'deezer' | 'itunes' | 'qq',
+        source: 'deezer' | 'itunes' | 'qq' | 'kugou',
     ): Candidate | null => {
         const ranked = candidates
             .map(candidate => ({ candidate, score: scoreOf(candidate, track) }))
@@ -268,6 +268,50 @@ export function createCoverResolver({
         return publish(cacheKey(track), image, 'qq');
     };
 
+    // KuGou's search result carries an album image host for the exact version (e.g. a 空灵女版 remix
+    // that iTunes and QQ do not list), which is what makes Chinese covers actually show up.
+    const fromKugou = async (track: NowPlayingTrack): Promise<CoverResult | null> => {
+        const keyword = [toSimplified(track.title), toSimplified(track.artists[0] ?? '')].filter(Boolean).join(' ');
+        if (!keyword) return null;
+        const search = new URLSearchParams({
+            keyword,
+            page: '1',
+            pagesize: '8',
+            platform: 'WebFilter',
+            userid: '-1',
+            clientver: '2000',
+            iscorrection: '1',
+            privilege_filter: '0',
+        });
+        const answer = await fetchJsonImpl(
+            `https://songsearch.kugou.com/song_search_v2?${search.toString()}`,
+            {
+                timeoutMs: 6000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+                },
+            },
+        ).catch(error => {
+            log.debug('kugou cover search failed', error);
+            return { body: null };
+        });
+        const candidates: Candidate[] = ((answer.body as { data?: { lists?: { SongName?: unknown; SingerName?: unknown; Duration?: unknown; Image?: unknown }[] } } | null)?.data?.lists ?? [])
+            .filter(song => typeof song.Image === 'string' && song.Image.includes('{size}'))
+            .map(song => ({
+                title: typeof song.SongName === 'string' ? song.SongName : '',
+                artist: typeof song.SingerName === 'string' ? song.SingerName : '',
+                durationMs: Math.round((Number(song.Duration) || 0) * 1000),
+                imageUrl: String(song.Image).replace('{size}', '500').replace(/^http:/, 'https:'),
+                source: 'kugou' as const,
+            }));
+        const best = pick(candidates, track, 'kugou');
+        if (!best) return null;
+        const image = await download(best.imageUrl);
+        if (!image) return null;
+        log.info(`cover: kugou (${best.title})`);
+        return publish(cacheKey(track), image, 'kugou');
+    };
+
     const inflight = new Map<string, Promise<CoverResult | null>>();
 
     return {
@@ -280,7 +324,7 @@ export function createCoverResolver({
             const running = inflight.get(key);
             if (running) return running;
             const lookup = new Promise<CoverResult | null>(resolve => {
-                let pending = 3;
+                let pending = 4;
                 let settled = false;
                 const finish = (cover: CoverResult | null) => {
                     pending -= 1;
@@ -297,6 +341,7 @@ export function createCoverResolver({
                 fromDeezer(track).then(finish, () => finish(null));
                 fromItunes(track).then(finish, () => finish(null));
                 fromQq(track).then(finish, () => finish(null));
+                fromKugou(track).then(finish, () => finish(null));
             })
                 .then(cover => {
                     if (!cover) {
