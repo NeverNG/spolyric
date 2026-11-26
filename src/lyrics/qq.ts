@@ -7,6 +7,7 @@ import type { Logger } from '../log.js';
 import type { NowPlayingTrack } from '../spotify/types.js';
 import { normalizeLrc } from './lrc.js';
 import { pickBest } from './match.js';
+import { toSimplified } from './zh.js';
 
 export type QqLyrics = { lrc: string | null; definitive: boolean };
 
@@ -45,7 +46,7 @@ export async function fromQq({
 }): Promise<QqLyrics> {
     if (!track.title || track.artists.length === 0) return { lrc: null, definitive: true };
     const query = new URLSearchParams({
-        w: `${track.title} ${track.artists[0]}`,
+        w: `${toSimplified(track.title)} ${toSimplified(track.artists[0] ?? '')}`,
         format: 'json',
         n: '10',
         p: '1',

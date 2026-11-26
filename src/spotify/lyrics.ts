@@ -11,6 +11,7 @@ import { fromNetease } from '../lyrics/netease.js';
 import { fromQq } from '../lyrics/qq.js';
 import { fromKugou } from '../lyrics/kugou.js';
 import { normalizeLrc } from '../lyrics/lrc.js';
+import { toSimplified } from '../lyrics/zh.js';
 import type { NowPlayingTrack } from './types.js';
 
 export { normalizeLrc } from '../lyrics/lrc.js';
@@ -189,8 +190,8 @@ async function fromLrclib({
 }): Promise<SpotifyLyricsAnswer> {
     const headers = { 'User-Agent': 'Spolyric/0.1 (Folia stage companion)', Accept: 'application/json' };
     const durationSeconds = track.durationMs > 0 ? String(Math.round(track.durationMs / 1000)) : '';
-    const get = new URLSearchParams({ track_name: track.title, artist_name: track.artists[0] ?? '' });
-    if (track.album) get.set('album_name', track.album);
+    const get = new URLSearchParams({ track_name: toSimplified(track.title), artist_name: toSimplified(track.artists[0] ?? '') });
+    if (track.album) get.set('album_name', toSimplified(track.album));
     if (durationSeconds) get.set('duration', durationSeconds);
     try {
         const answer = await fetchJson<LrclibAnswer>(`${base}/api/get?${get.toString()}`, { headers, timeoutMs, signal }, fetchImpl);
@@ -200,7 +201,7 @@ async function fromLrclib({
         if (!(error instanceof HttpError) || error.status !== 404) throw error;
     }
     // No exact match: search, and take the timed candidate nearest the same length.
-    const search = new URLSearchParams({ track_name: track.title, artist_name: track.artists[0] ?? '' });
+    const search = new URLSearchParams({ track_name: toSimplified(track.title), artist_name: toSimplified(track.artists[0] ?? '') });
     let candidates: LrclibAnswer[];
     try {
         const answer = await fetchJson<LrclibAnswer[]>(`${base}/api/search?${search.toString()}`, { headers, timeoutMs, signal }, fetchImpl);

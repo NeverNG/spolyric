@@ -9,6 +9,7 @@ import { fromNetease } from '../lyrics/netease.js';
 import { fromQq } from '../lyrics/qq.js';
 import { fromKugou } from '../lyrics/kugou.js';
 import { normalizeLrc } from '../lyrics/lrc.js';
+import { toSimplified } from '../lyrics/zh.js';
 export { normalizeLrc } from '../lyrics/lrc.js';
 /** The fallback order after the preferred source, as Folia's own registry orders them (the sources we have). */
 export const LYRIC_SOURCE_ORDER = ['netease', 'qq', 'kugou', 'spotify', 'lrclib'];
@@ -114,9 +115,9 @@ async function fromSpotify({ trackId, getToken, fetchImpl, timeoutMs, base, sign
 async function fromLrclib({ track, base, fetchImpl, timeoutMs, log, signal, }) {
     const headers = { 'User-Agent': 'Spolyric/0.1 (Folia stage companion)', Accept: 'application/json' };
     const durationSeconds = track.durationMs > 0 ? String(Math.round(track.durationMs / 1000)) : '';
-    const get = new URLSearchParams({ track_name: track.title, artist_name: track.artists[0] ?? '' });
+    const get = new URLSearchParams({ track_name: toSimplified(track.title), artist_name: toSimplified(track.artists[0] ?? '') });
     if (track.album)
-        get.set('album_name', track.album);
+        get.set('album_name', toSimplified(track.album));
     if (durationSeconds)
         get.set('duration', durationSeconds);
     try {
@@ -130,7 +131,7 @@ async function fromLrclib({ track, base, fetchImpl, timeoutMs, log, signal, }) {
             throw error;
     }
     // No exact match: search, and take the timed candidate nearest the same length.
-    const search = new URLSearchParams({ track_name: track.title, artist_name: track.artists[0] ?? '' });
+    const search = new URLSearchParams({ track_name: toSimplified(track.title), artist_name: toSimplified(track.artists[0] ?? '') });
     let candidates;
     try {
         const answer = await fetchJson(`${base}/api/search?${search.toString()}`, { headers, timeoutMs, signal }, fetchImpl);

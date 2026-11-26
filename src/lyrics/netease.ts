@@ -8,6 +8,7 @@ import type { Logger } from '../log.js';
 import type { NowPlayingTrack } from '../spotify/types.js';
 import { normalizeLrc } from './lrc.js';
 import { pickBest, scoreCandidate } from './match.js';
+import { toSimplified } from './zh.js';
 
 export type NeteaseLyrics = { lrc: string | null; definitive: boolean };
 
@@ -57,7 +58,7 @@ export async function fromNetease({
 }): Promise<NeteaseLyrics> {
     if (!track.title || track.artists.length === 0) return { lrc: null, definitive: true };
     const search = new URLSearchParams({
-        s: `${track.title} ${track.artists[0]}`,
+        s: `${toSimplified(track.title)} ${toSimplified(track.artists[0] ?? '')}`,
         type: '1',
         limit: '10',
     });

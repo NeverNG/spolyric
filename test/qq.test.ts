@@ -46,6 +46,26 @@ test('QQ HTML entities in the lyric are decoded', async () => {
     assert.equal(answer.lrc, '[00:01.00]a\n[00:02.00]b');
 });
 
+test('a traditional title and artist are searched as simplified', async () => {
+    let seen = '';
+    const fetchImpl = (async (url: string | URL | Request) => {
+        const href = String(url);
+        if (href.includes('client_search_cp')) {
+            seen = decodeURIComponent(href);
+            return new Response(JSON.stringify({ data: { song: { list: [{ songmid: 'MID', songname: '白桦林', interval: 227, singer: [{ name: '朴树' }] }] } } }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ lyric: '[00:01.00]a\n[00:02.00]b' }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const answer = await fromQq({
+        track: { ...track, title: '白樺林', artists: ['朴樹'] },
+        fetchImpl,
+        timeoutMs: 3000,
+        log: silentLogger(),
+    });
+    assert.ok(seen.includes('白桦林'), 'the query is converted to simplified');
+    assert.equal(answer.lrc, '[00:01.00]a\n[00:02.00]b');
+});
+
 test('a same-title QQ song by another singer and length is not used', async () => {
     const answer = await fromQq({
         track,

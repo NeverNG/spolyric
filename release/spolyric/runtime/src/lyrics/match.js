@@ -2,7 +2,8 @@
 // The one rule for "is this catalogue hit the same song": exact title, matching artist, close duration.
 // Folia's own lyric matcher is not available outside its renderer, so the sources it searches are asked
 // here with this rule instead.
-export const normalizeForMatch = (value) => value
+import { toSimplified } from './zh.js';
+export const normalizeForMatch = (value) => toSimplified(value)
     .toLowerCase()
     .normalize('NFKC')
     .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')

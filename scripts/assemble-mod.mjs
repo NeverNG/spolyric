@@ -78,7 +78,7 @@ fs.writeFileSync(path.join(modDir, 'README.md'), [
     "",
     "## 功能",
     "",
-    "- **歌词**：首选源默认 QQ（和 Folia 一样），顺序是 QQ → 网易云 → 酷狗 → Spotify → LRCLIB，第一个匹配就用；",
+    "- **歌词**：首选源默认 QQ（和 Folia 一样），顺序是 QQ → 网易云 → 酷狗 → Spotify → LRCLIB，第一个匹配就用（匹配前会做繁体转简体）；",
     "  可以用命令行 `--prefer` 改首选源。匹配不到就不放歌词，不编造。",
     "- **封面**：按标题 + 歌手 + 时长在 iTunes / QQ 音乐 / Deezer 匹配，下载后由本机的 loopback 服务提供给 Folia；匹配不到就不放。",
     "- **播放控制**：舞台的播放/暂停和进度条会作用到 Spotify；进度条两端另有 `⏮` / `⏭` 两个按钮",

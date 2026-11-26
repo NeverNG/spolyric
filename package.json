@@ -1,6 +1,6 @@
 {
   "name": "spolyric",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "Show what Spotify is playing on Folia's stage, with Folia's own lyrics visuals.",
   "license": "MIT",

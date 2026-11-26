@@ -4,6 +4,7 @@
 // here with this rule instead.
 
 import type { NowPlayingTrack } from '../spotify/types.js';
+import { toSimplified } from './zh.js';
 
 export type MatchCandidate = {
     title: string;
@@ -11,7 +12,7 @@ export type MatchCandidate = {
     durationMs: number;
 };
 
-export const normalizeForMatch = (value: string): string => value
+export const normalizeForMatch = (value: string): string => toSimplified(value)
     .toLowerCase()
     .normalize('NFKC')
     .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')

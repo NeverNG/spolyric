@@ -6,9 +6,10 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fetchBytes, fetchJson } from '../http.js';
+import { toSimplified } from '../lyrics/zh.js';
 const MAX_IMAGE_BYTES = 1_500_000;
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-const normalize = (value) => value
+const normalize = (value) => toSimplified(value)
     .toLowerCase()
     .normalize('NFKC')
     .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
@@ -107,7 +108,7 @@ export function createCoverResolver({ cacheDir, log, server, fetchJsonImpl = fet
         return best && best.score >= 4 ? best.candidate : null;
     };
     const fromDeezer = async (track) => {
-        const query = [track.title, track.artists[0] ?? ''].filter(Boolean).join(' ');
+        const query = [toSimplified(track.title), toSimplified(track.artists[0] ?? '')].filter(Boolean).join(' ');
         if (!query)
             return null;
         const answer = await fetchJsonImpl(`https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=8`, { timeoutMs: 6000 }).catch(error => {
@@ -133,7 +134,7 @@ export function createCoverResolver({ cacheDir, log, server, fetchJsonImpl = fet
         return publish(cacheKey(track), image, 'deezer');
     };
     const fromItunes = async (track) => {
-        const term = [track.title, track.artists[0] ?? ''].filter(Boolean).join(' ');
+        const term = [toSimplified(track.title), toSimplified(track.artists[0] ?? '')].filter(Boolean).join(' ');
         if (!term)
             return null;
         const answer = await fetchJsonImpl(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=8`, { timeoutMs: 6000 }).catch(error => {
@@ -161,7 +162,7 @@ export function createCoverResolver({ cacheDir, log, server, fetchJsonImpl = fet
     // QQ Music has the Chinese catalogue (and Folia's default lyric source). Its search result carries
     // the album mid, whose photo host serves the same album art at any size.
     const fromQq = async (track) => {
-        const term = [track.title, track.artists[0] ?? ''].filter(Boolean).join(' ');
+        const term = [toSimplified(track.title), toSimplified(track.artists[0] ?? '')].filter(Boolean).join(' ');
         if (!term)
             return null;
         const answer = await fetchJsonImpl(`https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w=${encodeURIComponent(term)}&format=json&n=8&p=1`, {

@@ -7,6 +7,7 @@ import type { Logger } from '../log.js';
 import type { NowPlayingTrack } from '../spotify/types.js';
 import { normalizeLrc } from './lrc.js';
 import { pickBest } from './match.js';
+import { toSimplified } from './zh.js';
 
 export type KugouLyrics = { lrc: string | null; definitive: boolean };
 
@@ -56,7 +57,7 @@ export async function fromKugou({
 }): Promise<KugouLyrics> {
     if (!track.title || track.artists.length === 0) return { lrc: null, definitive: true };
     const search = new URLSearchParams({
-        keyword: `${track.title} ${track.artists[0]}`,
+        keyword: `${toSimplified(track.title)} ${toSimplified(track.artists[0] ?? '')}`,
         page: '1',
         pagesize: '10',
         platform: 'WebFilter',

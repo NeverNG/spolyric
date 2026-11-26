@@ -4,6 +4,7 @@
 import { HttpError, fetchJson } from '../http.js';
 import { normalizeLrc } from './lrc.js';
 import { pickBest } from './match.js';
+import { toSimplified } from './zh.js';
 const HEADERS = {
     Referer: 'https://y.qq.com/',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
@@ -19,7 +20,7 @@ export async function fromQq({ track, fetchImpl, timeoutMs, log, signal, }) {
     if (!track.title || track.artists.length === 0)
         return { lrc: null, definitive: true };
     const query = new URLSearchParams({
-        w: `${track.title} ${track.artists[0]}`,
+        w: `${toSimplified(track.title)} ${toSimplified(track.artists[0] ?? '')}`,
         format: 'json',
         n: '10',
         p: '1',
