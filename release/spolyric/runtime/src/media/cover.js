@@ -1,10 +1,9 @@
 // src/media/cover.ts
 // Spotify's own album art, through the Windows media session (SMTC). `cover.exe` is the small .NET
-// helper in this directory (source: coverSession.cs); SMTC's thumbnail is not reachable from
-// PowerShell 5.1's WinRT projection, so a helper process reads it and writes one image file.
+// helper in this directory (source: coverSession.cs); it writes the thumbnail to stdout because
+// PowerShell 5.1's WinRT projection cannot read the thumbnail stream.
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { readFile, unlink } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 export const coverExePath = () => fileURLToPath(new URL('./cover.exe', import.meta.url));
 const mimeOf = (bytes) => {
@@ -18,45 +17,40 @@ const mimeOf = (bytes) => {
         return 'image/gif';
     return null;
 };
-const run = (exe, output, timeoutMs) => new Promise(resolve => {
-    const child = spawn(exe, [output], { windowsHide: true, stdio: 'ignore' });
+const read = (exe, timeoutMs) => new Promise(resolve => {
+    const child = spawn(exe, [], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+    const chunks = [];
+    let settled = false;
+    const finish = (bytes) => {
+        if (settled)
+            return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(bytes);
+    };
     const timer = setTimeout(() => {
         child.kill();
-        resolve(false);
+        finish(null);
     }, timeoutMs);
-    child.once('error', () => {
-        clearTimeout(timer);
-        resolve(false);
-    });
-    child.once('exit', code => {
-        clearTimeout(timer);
-        resolve(code === 0);
-    });
+    child.stdout.on('data', chunk => chunks.push(Buffer.from(chunk)));
+    child.once('error', () => finish(null));
+    child.once('exit', code => finish(code === 0 ? Buffer.concat(chunks) : null));
 });
 /**
  * Reads the current Spotify session's thumbnail. Returns null when Spotify has no thumbnail, the helper
  * is missing (not Windows), or it does not answer in time; the caller falls back to the catalogues.
  */
-export async function readSpotifyCover(exePath, outputDir, log, timeoutMs = 3000) {
+export async function readSpotifyCover(exePath, log, timeoutMs = 3000) {
     if (!existsSync(exePath))
         return null;
-    const output = `${outputDir}\\cover-${process.pid}-${Date.now()}.img`;
-    const ok = await run(exePath, output, timeoutMs);
-    if (!ok)
+    const bytes = await read(exePath, timeoutMs);
+    if (!bytes)
         return null;
-    try {
-        const bytes = await readFile(output);
-        const mime = mimeOf(bytes);
-        if (!mime || bytes.length < 1000)
-            return null;
-        return { bytes, mime };
-    }
-    catch (error) {
-        log.debug('could not read the Spotify thumbnail', error);
+    const mime = mimeOf(bytes);
+    if (!mime || bytes.length < 1000) {
+        log.debug('the Spotify thumbnail was empty or not an image', { bytes: bytes.length });
         return null;
     }
-    finally {
-        await unlink(output).catch(() => undefined);
-    }
+    return { bytes, mime };
 }
 //# sourceMappingURL=cover.js.map

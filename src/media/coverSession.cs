@@ -2,17 +2,13 @@ using System;
 using System.IO;
 using Windows.Media.Control;
 
-// Reads the album art of the Spotify session through the Windows media session (SMTC).
-// This is the exact cover Spotify shows; no catalogue matching involved.
+// Writes the Spotify session's album art (the exact thumbnail Spotify shows) to stdout as raw bytes.
+// SMTC's thumbnail stream is not reachable from PowerShell 5.1's WinRT projection, so the daemon runs
+// this small helper and reads its stdout. Source: coverSession.cs; compiled with csc.
 public static class Program
 {
-    public static int Main(string[] args)
+    public static int Main()
     {
-        if (args.Length < 1)
-        {
-            Console.Error.WriteLine("usage: cover.exe <output>");
-            return 2;
-        }
         try
         {
             var manager = GlobalSystemMediaTransportControlsSessionManager.RequestAsync().AsTask().GetAwaiter().GetResult();
@@ -31,7 +27,11 @@ public static class Program
                         reader.LoadAsync((uint)stream.Size).AsTask().GetAwaiter().GetResult();
                         reader.ReadBytes(bytes);
                     }
-                    File.WriteAllBytes(args[0], bytes);
+                    using (var stdout = Console.OpenStandardOutput())
+                    {
+                        stdout.Write(bytes, 0, bytes.Length);
+                        stdout.Flush();
+                    }
                 }
                 return 0;
             }
