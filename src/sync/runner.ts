@@ -2,6 +2,8 @@
 // The long-running part: keep a Stage connection (Folia restarts write a new token), tick the engine, and back off.
 
 import type { SpolyricConfig } from '../config.js';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { readStageConnection, type StageConnection } from '../folia/connection.js';
 import { createStageClient, type StageClient } from '../folia/stage.js';
 import { sleep } from '../http.js';
@@ -10,6 +12,7 @@ import { coverCacheDir, lyricsCacheDir } from '../paths.js';
 import { createCoverResolver } from '../cover/resolver.js';
 import { createCoverServer } from '../cover/server.js';
 import { createLocalController } from '../media/control.js';
+import { coverExePath, readSpotifyCover } from '../media/cover.js';
 import { SpotifyAuthError, type TokenProvider } from '../spotify/auth.js';
 import { createLyricsCache, createLyricsResolver } from '../spotify/lyrics.js';
 import { createSyncEngine, type SyncEngine } from './engine.js';
@@ -98,6 +101,15 @@ export async function runSync({ config, dataDir, tokens, log, signal, dryRun = f
             driftThresholdMs: config.driftThresholdMs,
             lyricsOffsetMs: config.lyricsOffsetMs,
             cover,
+            coverFromSpotify: () => {
+                try {
+                    mkdirSync(join(dataDir, 'tmp'), { recursive: true });
+                } catch (error) {
+                    log.debug('could not create the cover temp directory', error);
+                    return Promise.resolve(null);
+                }
+                return readSpotifyCover(coverExePath(), join(dataDir, 'tmp'), log);
+            },
             dryRun,
             control: controller?.available
                 ? (action, positionMs) => (canControl() ? controller.control(action, positionMs) : Promise.resolve(false))

@@ -47,6 +47,14 @@ test('a Spotify session becomes a track with a local id', async () => {
     assert.equal(playing.deviceName, '本机 Spotify');
 });
 
+test('a Spotify ad is not turned into a track', async () => {
+    const clock = new ManualClock();
+    const reader = readerWith(snapshot({ title: '無廣告收聽音樂。', artist: 'Spotify', album: '', durationMs: 29_914 }));
+    const player = createLocalPlayer({ reader, log: silentLogger(), now: clock.now });
+    const playing = await player.getNowPlaying();
+    assert.equal(playing.state, 'ad');
+});
+
 test('another app in SMTC is not shown', async () => {
     const clock = new ManualClock();
     const reader = readerWith(snapshot({ app: 'Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic' }));

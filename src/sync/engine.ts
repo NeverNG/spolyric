@@ -30,6 +30,8 @@ export type SyncEngineOptions = {
     stagePlayerStatus?: () => Promise<StagePlayerStatus | null>;
     /** Cover lookup for sources that do not carry one (the local SMTC source). */
     cover?: CoverResolver;
+    /** Spotify's own thumbnail (exact cover art); null falls back to the catalogue lookup. */
+    coverFromSpotify?: (track: NowPlayingTrack) => Promise<{ bytes: Uint8Array; mime: string } | null>;
     /** Shifts every lyric timestamp by this many milliseconds (positive = later). */
     lyricsOffsetMs?: number;
 };
@@ -103,6 +105,7 @@ export function createSyncEngine({
     control,
     stagePlayerStatus,
     cover,
+    coverFromSpotify,
     lyricsOffsetMs = 0,
 }: SyncEngineOptions): SyncEngine {
     let session: Session | null = null;
@@ -214,11 +217,29 @@ export function createSyncEngine({
     /** Starts the cover lookup in the background; a later tick takes the answer when it is there. */
     const startCoverLookup = (track: NowPlayingTrack): PendingCover => {
         const entry: PendingCover = { trackKey: trackKeyOf(track), settled: false, value: null };
-        if (!cover) {
+        const resolver = cover;
+        if (!resolver) {
             entry.settled = true;
             return entry;
         }
-        cover.get(track).then(
+        const load = async (): Promise<CoverResult | null> => {
+            if (coverFromSpotify) {
+                try {
+                    const raw = await coverFromSpotify(track);
+                    if (raw) {
+                        const stored = await resolver.store(track, raw.bytes, raw.mime);
+                        if (stored) {
+                            log.info(`cover: spotify (${track.title})`);
+                            return stored;
+                        }
+                    }
+                } catch (error) {
+                    log.debug('the Spotify cover failed; falling back to the catalogues', error);
+                }
+            }
+            return resolver.get(track);
+        };
+        load().then(
             value => {
                 entry.settled = true;
                 entry.value = value;

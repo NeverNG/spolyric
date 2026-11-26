@@ -5,3 +5,5 @@ dist-mod/
 reference/
 *.log
 lumen-keys/
+test-data/
+cover-test.png

@@ -282,6 +282,16 @@ export function createCoverResolver({ cacheDir, log, server, fetchJsonImpl = fet
             inflight.set(key, lookup);
             return lookup;
         },
+        async store(track, bytes, mime) {
+            const image = Buffer.from(bytes);
+            const actual = imageTypeOf(image);
+            if (!actual || image.length > MAX_IMAGE_BYTES)
+                return null;
+            const key = cacheKey(track);
+            writeCache(key, { bytes: image, mime: actual }, 'spotify');
+            await server.start();
+            return { url: server.urlFor(key), source: 'spotify' };
+        },
         close() {
             server.close();
         },

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const assets = ['readSession.ps1', 'controlSession.ps1'];
+const assets = ['readSession.ps1', 'controlSession.ps1', 'cover.exe', 'coverSession.cs'];
 
 for (const name of assets) {
     const source = path.join(root, 'src', 'media', name);

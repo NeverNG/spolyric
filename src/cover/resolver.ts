@@ -15,12 +15,14 @@ import type { CoverServer } from './server.js';
 export type CoverResult = {
     /** An http URL on the loopback cover server (`127.0.0.1`). */
     url: string;
-    source: 'deezer' | 'itunes' | 'qq' | 'kugou' | 'cache';
+    source: 'deezer' | 'itunes' | 'qq' | 'kugou' | 'spotify' | 'cache';
 };
 
 export type CoverResolver = {
     /** Looks the cover up (cache first); null when no catalogue has a confident match. */
     get(track: NowPlayingTrack): Promise<CoverResult | null>;
+    /** Stores an exact image (Spotify's own thumbnail) under this track's key. */
+    store(track: NowPlayingTrack, bytes: Uint8Array, mime: string): Promise<CoverResult | null>;
     close(): void;
 };
 
@@ -356,6 +358,15 @@ export function createCoverResolver({
                 .finally(() => inflight.delete(key));
             inflight.set(key, lookup);
             return lookup;
+        },
+        async store(track, bytes, mime) {
+            const image = Buffer.from(bytes);
+            const actual = imageTypeOf(image);
+            if (!actual || image.length > MAX_IMAGE_BYTES) return null;
+            const key = cacheKey(track);
+            writeCache(key, { bytes: image, mime: actual }, 'spotify');
+            await server.start();
+            return { url: server.urlFor(key), source: 'spotify' };
         },
         close() {
             server.close();

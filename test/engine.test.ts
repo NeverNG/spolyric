@@ -22,6 +22,7 @@ const setup = (overrides: {
     control?: (action: 'play' | 'pause' | 'seek', positionMs?: number) => Promise<boolean>;
     withStageStatus?: boolean;
     cover?: CoverResolver;
+    coverFromSpotify?: (track: import('../src/spotify/types.js').NowPlayingTrack) => Promise<{ bytes: Uint8Array; mime: string } | null>;
 } = {}): Harness & { controlCalls: { action: string; positionMs: number }[] } => {
     const clock = new ManualClock();
     const stage = createFakeStage();
@@ -46,6 +47,7 @@ const setup = (overrides: {
         control,
         stagePlayerStatus: overrides.withStageStatus === false ? undefined : () => Promise.resolve(stage.playerStatusValue),
         cover: overrides.cover,
+        coverFromSpotify: overrides.coverFromSpotify,
     });
     return { clock, stage, player, lyrics, engine, controlCalls };
 };
@@ -389,7 +391,13 @@ test('a cover found for a track without one is pushed onto the stage', async () 
     const coverPromise = new Promise<CoverResult | null>(resolve => {
         resolveCover = resolve;
     });
-    const { engine, stage, player, clock } = setup({ cover: { get: () => coverPromise, close: () => {} } });
+    const { engine, stage, player, clock } = setup({
+        cover: {
+            get: () => coverPromise,
+            store: () => Promise.resolve(null),
+            close: () => {},
+        },
+    });
     const localTrack = track({ id: 'local:one', coverUrl: null });
     player.set(playingAt(clock.value, 0, { track: localTrack }));
     await engine.tick();
@@ -402,6 +410,36 @@ test('a cover found for a track without one is pushed onto the stage', async () 
     assert.equal(stage.sessions.at(-1)?.coverUrl, 'http://127.0.0.1:9/cover/abc.jpg');
 });
 
+test('the Spotify thumbnail is stored before any catalogue is asked', async () => {
+    let catalogAsked = 0;
+    let stored: Uint8Array | null = null;
+    const cover = {
+        get: () => {
+            catalogAsked += 1;
+            return Promise.resolve(null);
+        },
+        store: (_track: unknown, bytes: Uint8Array) => {
+            stored = bytes;
+            return Promise.resolve({ url: 'http://127.0.0.1:9/cover/spotify.jpg', source: 'spotify' as const });
+        },
+        close: () => {},
+    };
+    const { engine, stage, player, clock } = setup({
+        cover,
+        coverFromSpotify: () => Promise.resolve({ bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]), mime: 'image/png' }),
+    });
+    const localTrack = track({ id: 'local:thumb', coverUrl: null });
+    player.set(playingAt(clock.value, 0, { track: localTrack }));
+    await engine.tick();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    clock.advance(1600);
+    player.set(playingAt(clock.value, 1600, { track: localTrack }));
+    await engine.tick();
+    assert.deepEqual(stored, new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    assert.equal(catalogAsked, 0, 'the exact thumbnail means no catalogue lookup');
+    assert.equal(stage.sessions.at(-1)?.coverUrl, 'http://127.0.0.1:9/cover/spotify.jpg');
+});
+
 test('a track that already has a cover is not looked up', async () => {
     let asked = 0;
     const { engine, stage } = setup({
@@ -410,6 +448,7 @@ test('a track that already has a cover is not looked up', async () => {
                 asked += 1;
                 return Promise.resolve(null);
             },
+            store: () => Promise.resolve(null),
             close: () => {},
         },
     });

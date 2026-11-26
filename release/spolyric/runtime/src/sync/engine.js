@@ -10,7 +10,7 @@ const positionAt = (session, at) => {
     const duration = session.track.durationMs;
     return duration > 0 ? Math.min(raw, duration) : raw;
 };
-export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, clockIntervalMs, emptyGraceMs, seekThresholdMs, driftThresholdMs, dryRun = false, control, stagePlayerStatus, cover, lyricsOffsetMs = 0, }) {
+export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, clockIntervalMs, emptyGraceMs, seekThresholdMs, driftThresholdMs, dryRun = false, control, stagePlayerStatus, cover, coverFromSpotify, lyricsOffsetMs = 0, }) {
     let session = null;
     let emptySince = null;
     let pendingLyrics = null;
@@ -120,11 +120,30 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
     /** Starts the cover lookup in the background; a later tick takes the answer when it is there. */
     const startCoverLookup = (track) => {
         const entry = { trackKey: trackKeyOf(track), settled: false, value: null };
-        if (!cover) {
+        const resolver = cover;
+        if (!resolver) {
             entry.settled = true;
             return entry;
         }
-        cover.get(track).then(value => {
+        const load = async () => {
+            if (coverFromSpotify) {
+                try {
+                    const raw = await coverFromSpotify(track);
+                    if (raw) {
+                        const stored = await resolver.store(track, raw.bytes, raw.mime);
+                        if (stored) {
+                            log.info(`cover: spotify (${track.title})`);
+                            return stored;
+                        }
+                    }
+                }
+                catch (error) {
+                    log.debug('the Spotify cover failed; falling back to the catalogues', error);
+                }
+            }
+            return resolver.get(track);
+        };
+        load().then(value => {
             entry.settled = true;
             entry.value = value;
         }, error => {

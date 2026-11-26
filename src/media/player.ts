@@ -76,6 +76,15 @@ export function createLocalPlayer({
             const durationMs = state.durationMs;
             const raw = Math.max(0, state.clockMs);
             const positionMs = durationMs > 0 ? Math.min(raw, durationMs) : raw;
+            // Spotify's free tier reports its ad as a ~30 s "track" by the artist "Spotify". Pushing it
+            // would replace the lyrics with an ad title and a blank cover until the song comes back.
+            if (
+                /無廣告|无广告|advertisement/i.test(snapshot.title)
+                || (snapshot.artist.trim().toLowerCase() === 'spotify' && durationMs > 0 && durationMs <= 60_000)
+            ) {
+                log.debug('local session: ad', { title: snapshot.title });
+                return { state: 'ad', deviceName: '本机 Spotify' };
+            }
             const track: NowPlayingTrack = {
                 id: `local:${snapshot.title}|${snapshot.artist}`,
                 kind: 'track',
