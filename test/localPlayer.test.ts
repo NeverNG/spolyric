@@ -47,12 +47,15 @@ test('a Spotify session becomes a track with a local id', async () => {
     assert.equal(playing.deviceName, '本机 Spotify');
 });
 
-test('a Spotify ad is not turned into a track', async () => {
+test('a Spotify ad is not turned into a track, but keeps its own clock', async () => {
     const clock = new ManualClock();
-    const reader = readerWith(snapshot({ title: '無廣告收聽音樂。', artist: 'Spotify', album: '', durationMs: 29_914 }));
+    const reader = readerWith(snapshot({ title: '無廣告收聽音樂。', artist: 'Spotify', album: '', durationMs: 29_914, positionMs: 1000 }));
     const player = createLocalPlayer({ reader, log: silentLogger(), now: clock.now });
     const playing = await player.getNowPlaying();
     assert.equal(playing.state, 'ad');
+    if (playing.state !== 'ad') return;
+    assert.equal(playing.durationMs, 29_914);
+    assert.equal(playing.positionMs, 1000);
 });
 
 test('another app in SMTC is not shown', async () => {

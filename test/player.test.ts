@@ -98,6 +98,29 @@ test('an ad is told apart from a track', async () => {
     }
 });
 
+test('an ad\'s own length and position are passed on to the stage', async () => {
+    const server = await startTestServer(() => ({
+        json: {
+            is_playing: true,
+            currently_playing_type: 'ad',
+            progress_ms: 12_000,
+            item: { duration_ms: 30_000 },
+            device: { name: 'Phone' },
+        },
+    }));
+    try {
+        const player = createPlayerClient({ apiBase: server.baseUrl, getToken: async () => 'token', log: silentLogger() });
+        assert.deepEqual(await player.getNowPlaying(), {
+            state: 'ad',
+            deviceName: 'Phone',
+            durationMs: 30_000,
+            positionMs: 12_000,
+        });
+    } finally {
+        await server.close();
+    }
+});
+
 test('a refused playback state falls back to the narrower endpoint', async () => {
     const server = await startTestServer(request => {
         if (request.url === '/v1/me/player') {

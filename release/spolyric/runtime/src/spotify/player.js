@@ -92,8 +92,18 @@ export function createPlayerClient({ apiBase, getToken, fetchImpl = fetch, now =
             const deviceName = nameOf(answer.device?.name) || null;
             const playing = answer.is_playing === true;
             const kind = nameOf(answer.currently_playing_type);
-            if (kind === 'ad')
-                return { state: 'ad', deviceName };
+            if (kind === 'ad') {
+                // An ad is not a track: give the stage its own clock (the ad's length, from its start) so
+                // Folia counts the ad down and its visualizers treat the reset as a new, lyric-less song.
+                const adDuration = Number(answer.item?.duration_ms);
+                const adPosition = Number(answer.progress_ms);
+                return {
+                    state: 'ad',
+                    deviceName,
+                    ...(Number.isFinite(adDuration) && adDuration > 0 ? { durationMs: Math.round(adDuration) } : {}),
+                    ...(Number.isFinite(adPosition) && adPosition >= 0 ? { positionMs: adPosition } : {}),
+                };
+            }
             const track = trackFromItem(answer.item);
             if (!track)
                 return { state: 'idle', deviceName };

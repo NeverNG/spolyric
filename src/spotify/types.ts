@@ -15,7 +15,17 @@ export type NowPlayingTrack = {
 
 export type NowPlaying =
     | { state: 'idle'; deviceName: string | null }
-    | { state: 'ad'; deviceName: string | null }
+    | {
+        state: 'ad';
+        deviceName: string | null;
+        /**
+         * The ad's own length and position, when the source reports them. Folia's stage runs its
+         * clock over the ad instead of over the song, so the progress bar counts the ad down and
+         * the visualizers take the reset as a new, lyric-less song.
+         */
+        durationMs?: number;
+        positionMs?: number;
+    }
     | {
         state: 'track';
         track: NowPlayingTrack;

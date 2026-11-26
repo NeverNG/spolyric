@@ -1,4 +1,4 @@
 // src/version.ts
 // One version string, used by `--version` and the log.
-export const VERSION = '0.1.8';
+export const VERSION = '0.1.9';
 //# sourceMappingURL=version.js.map

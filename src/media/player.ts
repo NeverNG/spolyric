@@ -82,8 +82,8 @@ export function createLocalPlayer({
                 /無廣告|无广告|advertisement/i.test(snapshot.title)
                 || (snapshot.artist.trim().toLowerCase() === 'spotify' && durationMs > 0 && durationMs <= 60_000)
             ) {
-                log.debug('local session: ad', { title: snapshot.title });
-                return { state: 'ad', deviceName: '本机 Spotify' };
+                log.debug('local session: ad', { title: snapshot.title, durationMs, positionMs: Math.round(positionMs) });
+                return { state: 'ad', deviceName: '本机 Spotify', durationMs, positionMs };
             }
             const track: NowPlayingTrack = {
                 id: `local:${snapshot.title}|${snapshot.artist}`,

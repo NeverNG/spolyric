@@ -48,6 +48,8 @@ export type EngineSnapshot = {
 
 type PlayingTrack = Extract<NowPlaying, { state: 'track' }>;
 
+type AdState = Extract<NowPlaying, { state: 'ad' }>;
+
 type Session = {
     track: NowPlayingTrack;
     sessionUpdatedAt: number | null;
@@ -375,21 +377,26 @@ export function createSyncEngine({
 
     /**
      * An ad is not a song: instead of clearing the stage (Folia would show its "waiting for external
-     * input" card), keep the song that was there without its words, so Folia's lyrics animation runs
-     * on. The clock keeps going while the ad plays; the song's real position is pushed when it is back.
+     * input" card), keep the song that was there without its words, but give the stage the ad's own
+     * clock from 0. The progress bar then counts the ad down instead of sitting on the song's
+     * position, and Folia's visualizers take the reset as a new, lyric-less song, so their animation
+     * runs (they commit it after ~2 s; without the reset they wait out an 8 s grace first).
      */
-    const holdForAd = async (at: number): Promise<void> => {
+    const holdForAd = async (ad: AdState, at: number): Promise<void> => {
         const current = session;
         if (!current) return;
         // A real ad resets the idle grace: an "idle" tick in the middle of it must not clear the stage.
         emptySince = null;
         if (current.adHeld) return;
-        const positionMs = positionAt(current, at);
+        // The ad's length is the countdown; a source that reports none falls back to the song's.
+        const durationMs = ad.durationMs && ad.durationMs > 0 ? Math.round(ad.durationMs) : current.track.durationMs;
+        const positionMs = 0;
         if (dryRun) {
-            log.info('[dry-run] would keep the song on the stage without the words during the ad');
+            log.info('[dry-run] would keep the song on the stage with the ad\'s clock and no words', { durationMs });
             return;
         }
-        const sessionUpdatedAt = await pushSession(current.track, positionMs, false, null);
+        const track = durationMs === current.track.durationMs ? current.track : { ...current.track, durationMs };
+        const sessionUpdatedAt = await pushSession(track, positionMs, false, null);
         // `forget()` (a replaced connection) may have run while the push was in flight.
         if (session !== current) return;
         current.sessionUpdatedAt = sessionUpdatedAt;
@@ -399,7 +406,10 @@ export function createSyncEngine({
         current.lastClockAtMs = at;
         current.lyricsOnStage = false;
         current.adHeld = true;
-        log.info(`an ad is playing; ${current.track.title} stays on the stage without the words`);
+        log.info('an ad is playing; the stage counts it down without the words', {
+            title: current.track.title,
+            durationMs,
+        });
     };
 
     /**
@@ -739,7 +749,7 @@ export function createSyncEngine({
                     await handleTrack(playing, at);
                     remember(playing, at);
                 } else {
-                    if (playing.state === 'ad') await holdForAd(at);
+                    if (playing.state === 'ad') await holdForAd(playing, at);
                     else await handleEmpty(at);
                     remember(null, at);
                 }

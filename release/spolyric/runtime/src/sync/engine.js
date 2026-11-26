@@ -270,10 +270,12 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
     };
     /**
      * An ad is not a song: instead of clearing the stage (Folia would show its "waiting for external
-     * input" card), keep the song that was there without its words, so Folia's lyrics animation runs
-     * on. The clock keeps going while the ad plays; the song's real position is pushed when it is back.
+     * input" card), keep the song that was there without its words, but give the stage the ad's own
+     * clock from 0. The progress bar then counts the ad down instead of sitting on the song's
+     * position, and Folia's visualizers take the reset as a new, lyric-less song, so their animation
+     * runs (they commit it after ~2 s; without the reset they wait out an 8 s grace first).
      */
-    const holdForAd = async (at) => {
+    const holdForAd = async (ad, at) => {
         const current = session;
         if (!current)
             return;
@@ -281,12 +283,15 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
         emptySince = null;
         if (current.adHeld)
             return;
-        const positionMs = positionAt(current, at);
+        // The ad's length is the countdown; a source that reports none falls back to the song's.
+        const durationMs = ad.durationMs && ad.durationMs > 0 ? Math.round(ad.durationMs) : current.track.durationMs;
+        const positionMs = 0;
         if (dryRun) {
-            log.info('[dry-run] would keep the song on the stage without the words during the ad');
+            log.info('[dry-run] would keep the song on the stage with the ad\'s clock and no words', { durationMs });
             return;
         }
-        const sessionUpdatedAt = await pushSession(current.track, positionMs, false, null);
+        const track = durationMs === current.track.durationMs ? current.track : { ...current.track, durationMs };
+        const sessionUpdatedAt = await pushSession(track, positionMs, false, null);
         // `forget()` (a replaced connection) may have run while the push was in flight.
         if (session !== current)
             return;
@@ -297,7 +302,10 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
         current.lastClockAtMs = at;
         current.lyricsOnStage = false;
         current.adHeld = true;
-        log.info(`an ad is playing; ${current.track.title} stays on the stage without the words`);
+        log.info('an ad is playing; the stage counts it down without the words', {
+            title: current.track.title,
+            durationMs,
+        });
     };
     /**
      * The song is back after an ad: put it on the stage again with its words, at the position Spotify
@@ -665,7 +673,7 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
                 }
                 else {
                     if (playing.state === 'ad')
-                        await holdForAd(at);
+                        await holdForAd(playing, at);
                     else
                         await handleEmpty(at);
                     remember(null, at);
