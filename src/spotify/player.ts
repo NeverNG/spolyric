@@ -1,0 +1,156 @@
+// src/spotify/player.ts
+// One question, asked of Spotify: what is playing right now, and where is it? The Web API allows this for free accounts too.
+
+import { HttpError, fetchJson } from '../http.js';
+import type { Logger } from '../log.js';
+import type { NowPlaying, NowPlayingTrack } from './types.js';
+
+export type PlayerClient = {
+    getNowPlaying(): Promise<NowPlaying>;
+};
+
+type SpotifyImage = { url?: unknown; width?: unknown; height?: unknown };
+type SpotifyItem = {
+    id?: unknown;
+    type?: unknown;
+    name?: unknown;
+    duration_ms?: unknown;
+    is_local?: unknown;
+    artists?: { name?: unknown }[];
+    album?: { name?: unknown; images?: SpotifyImage[] };
+    show?: { name?: unknown; images?: SpotifyImage[] };
+    images?: SpotifyImage[];
+};
+type PlayerAnswer = {
+    is_playing?: unknown;
+    progress_ms?: unknown;
+    currently_playing_type?: unknown;
+    item?: SpotifyItem | null;
+    device?: { name?: unknown };
+};
+
+const nameOf = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+const coverOf = (images: SpotifyImage[] | undefined): string | null => {
+    if (!Array.isArray(images)) return null;
+    let best: { url: string; width: number } | null = null;
+    for (const image of images) {
+        const url = nameOf(image.url);
+        if (!url) continue;
+        const width = Number(image.width);
+        const size = Number.isFinite(width) ? width : 0;
+        if (!best || size > best.width) best = { url, width: size };
+    }
+    return best?.url ?? null;
+};
+
+const artistsOf = (item: SpotifyItem): string[] => {
+    if (Array.isArray(item.artists)) {
+        return item.artists.map(artist => nameOf(artist?.name)).filter(Boolean);
+    }
+    const show = nameOf(item.show?.name);
+    return show ? [show] : [];
+};
+
+export function trackFromItem(item: SpotifyItem | null | undefined): NowPlayingTrack | null {
+    if (!item) return null;
+    const title = nameOf(item.name);
+    if (!title) return null;
+    const kind: NowPlayingTrack['kind'] = item.type === 'episode' ? 'episode' : 'track';
+    const album = nameOf(item.album?.name) || nameOf(item.show?.name);
+    const duration = Number(item.duration_ms);
+    const id = nameOf(item.id);
+    return {
+        // A local file has an id only in the account it lives in; the name keeps two of them apart.
+        id: id || `local:${title}`,
+        kind,
+        title,
+        artists: artistsOf(item),
+        album,
+        durationMs: Number.isFinite(duration) && duration > 0 ? Math.round(duration) : 0,
+        coverUrl: coverOf(item.album?.images) ?? coverOf(item.show?.images) ?? coverOf(item.images),
+    };
+}
+
+export function createPlayerClient({
+    apiBase,
+    getToken,
+    fetchImpl = fetch,
+    now = Date.now,
+    log,
+    timeoutMs = 10_000,
+    signal,
+}: {
+    apiBase: string;
+    getToken(options?: { force?: boolean }): Promise<string>;
+    fetchImpl?: typeof fetch;
+    now?: () => number;
+    log: Logger;
+    timeoutMs?: number;
+    /** Aborted when the runner stops: a request in flight ends with it. */
+    signal?: AbortSignal;
+}): PlayerClient {
+    return {
+        async getNowPlaying(): Promise<NowPlaying> {
+            // The round trip is measured from the moment the request goes out, after any token work: a
+            // renewal must not be counted as time the track played.
+            const ask = async (forceToken: boolean, path: string): Promise<{ answer: PlayerAnswer | null; sentAt: number }> => {
+                const token = await getToken({ force: forceToken });
+                const sentAt = now();
+                const response = await fetchJson<PlayerAnswer>(`${apiBase}${path}`, {
+                    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+                    timeoutMs,
+                    signal,
+                }, fetchImpl);
+                return { answer: response.body, sentAt };
+            };
+            const askWithRenewal = async (path: string): Promise<{ answer: PlayerAnswer | null; sentAt: number }> => {
+                try {
+                    return await ask(false, path);
+                } catch (error) {
+                    if (!(error instanceof HttpError) || error.status !== 401) throw error;
+                    log.debug('Spotify answered 401; renewing the token and asking once more');
+                    return ask(true, path);
+                }
+            };
+
+            let answer: PlayerAnswer | null;
+            let sentAt: number;
+            try {
+                ({ answer, sentAt } = await askWithRenewal('/v1/me/player'));
+            } catch (error) {
+                // Some apps/accounts are refused the full playback state (403: scope, plan, or app quota)
+                // while the narrower "currently playing" endpoint still answers. Try it before giving up.
+                if (!(error instanceof HttpError) || error.status !== 403) throw error;
+                log.warn('Spotify refused GET /v1/me/player; trying GET /v1/me/player/currently-playing', {
+                    reason: error.apiReason || error.apiMessage || `HTTP ${error.status}`,
+                });
+                ({ answer, sentAt } = await askWithRenewal('/v1/me/player/currently-playing'));
+            }
+            const receivedAt = now();
+            if (!answer) return { state: 'idle', deviceName: null };
+
+            const deviceName = nameOf(answer.device?.name) || null;
+            const playing = answer.is_playing === true;
+            const kind = nameOf(answer.currently_playing_type);
+            if (kind === 'ad') return { state: 'ad', deviceName };
+
+            const track = trackFromItem(answer.item);
+            if (!track) return { state: 'idle', deviceName };
+
+            const reported = Number(answer.progress_ms);
+            const progress = Number.isFinite(reported) && reported >= 0 ? reported : 0;
+            // `progress_ms` was true when Spotify wrote the answer; half the round trip is the best guess at now.
+            const roundTrip = Math.max(0, receivedAt - sentAt);
+            const positionMs = playing ? progress + roundTrip / 2 : progress;
+            return {
+                state: 'track',
+                track,
+                isPlaying: playing,
+                positionMs,
+                sampledAtMs: receivedAt,
+                deviceName,
+            };
+        },
+    };
+}

@@ -1,0 +1,35 @@
+{
+  "name": "spolyric",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Show what Spotify is playing on Folia's stage, with Folia's own lyrics visuals.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "spotify",
+    "folia",
+    "lyrics",
+    "stage-api"
+  ],
+  "bin": {
+    "spolyric": "dist/src/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "start": "node dist/src/main.js run",
+    "login": "node dist/src/main.js login",
+    "status": "node dist/src/main.js status",
+    "demo": "node scripts/demo.mjs",
+    "mod": "npm run build && node scripts/assemble-mod.mjs",
+    "test": "node --test \"dist/test/*.test.js\"",
+    "check": "npm run build && npm run test",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "5.9.3"
+  }
+}
