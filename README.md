@@ -304,7 +304,7 @@ npm run mod      # 生成 dist-mod/spolyric/ 和 dist-mod/spolyric.zip
 
 ```powershell
 npm run build     # tsc → dist/，并把 readSession.ps1 复制过去
-npm test          # node:test，164 个用例（含真 socket、代理隧道与假 SMTC 的测试）
+npm test          # node:test，165 个用例（含真 socket、代理隧道与假 SMTC 的测试）
 npm run mod       # 打包成 Folia 模组（dist-mod/spolyric）
 npm run check     # build + test
 ```

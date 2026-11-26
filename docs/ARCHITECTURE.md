@@ -191,7 +191,7 @@ src/main.ts
 
 ## 9. 测试策略
 
-- `node:test`，编译后跑 `dist/test/*.test.js`（`npm test`，164 个用例）。
+- `node:test`，编译后跑 `dist/test/*.test.js`（`npm test`，165 个用例）。
 - 假件在 `test/helpers/fakes.ts`：假 Stage（记录会话/时钟/清空、可注入 409 与标题）、假播放器（可变快照）、假歌词（可 gate 住，模拟「歌词后到」）、手动时钟。
 - 纯函数单测：PKCE、LRC 生成/校验、条目归一化、配置夹取、路径发现、连接文件解析（含 JSON `null` / 数组）、代理解析、SMTC 输出行解析。
 - 协议单测：`src/folia/stage.ts`、`src/spotify/player.ts`、`src/http.ts` 跑在真的 loopback HTTP 服务上（`test/helpers/server.ts`），检查方法、Authorization、请求体、错误码、标题解析、403 回退、错误正文里的 Spotify 原话。

@@ -354,10 +354,18 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
         });
         const previous = lastStageState;
         lastStageState = state;
+        // Folia pauses the stage by itself when its clock reaches the pushed duration (a song ending,
+        // or a 30-second ad). That is not the listener pressing pause: treating it as one paused
+        // Spotify between songs and during ads.
+        const atSessionEnd = status.durationMs > 0 && status.positionMs >= status.durationMs - 1200;
         // A change on the stage is a press when its clock is where the session says it should be; a
         // stale snapshot around a track change is somewhere else entirely and waits one poll.
         if (previous !== null && previous !== state) {
             log.debug('stage transition', { previous, state, spotify: spotifyState, closeToExpected: Math.abs(status.positionMs - expected) <= STAGE_SEEK_MS });
+            if (state === 'PAUSED' && atSessionEnd) {
+                pendingPress = null;
+                return null;
+            }
             const closeToExpected = Math.abs(status.positionMs - expected) <= STAGE_SEEK_MS;
             if (closeToExpected) {
                 pendingPress = null;
@@ -377,6 +385,10 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
         if (pendingPress) {
             if (pendingPress.state !== state) {
                 pendingPress = null;
+            }
+            else if (state === 'PAUSED' && atSessionEnd) {
+                pendingPress = null;
+                return null;
             }
             else if (at - pendingPress.at < PRESS_CONFIRM_MS) {
                 return null;

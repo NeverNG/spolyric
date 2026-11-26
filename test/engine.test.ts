@@ -433,6 +433,19 @@ test('a drift correction never resumes a stage the listener paused', async () =>
     assert.equal(stage.clocks.at(-1)?.paused, true, 'the clock carries the state Folia should keep');
 });
 
+test('the stage pausing at the end of a track does not pause Spotify', async () => {
+    const { engine, stage, player, clock, controlCalls } = setup();
+    const sample = (state: 'PLAYING' | 'PAUSED', positionMs: number) => {
+        stage.playerStatusValue = { playerState: state, positionMs, durationMs: 213_000, sampledAtMs: clock.value, canSeek: true };
+    };
+    await engine.tick();
+    clock.advance(1600); player.set(playingAt(clock.value, 1600)); sample('PLAYING', 1600); await engine.tick();
+    clock.advance(1600); player.set(playingAt(clock.value, 3200)); sample('PLAYING', 3200); await engine.tick();
+    // Folia clamps at the pushed duration and pauses by itself; Spotify is still playing.
+    clock.advance(1600); player.set(playingAt(clock.value, 4800)); sample('PAUSED', 213_000); await engine.tick();
+    assert.deepEqual(controlCalls, [], 'the end of a track is not a pause press');
+});
+
 test('a stage that is down is logged, not thrown', async () => {
     const { engine, stage } = setup();
     stage.pushLyrics = async () => {
