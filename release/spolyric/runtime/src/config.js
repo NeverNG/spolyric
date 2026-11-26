@@ -12,7 +12,7 @@ export const DEFAULT_CONFIG = {
     emptyGraceMs: 20_000,
     seekThresholdMs: 1500,
     driftThresholdMs: 5000,
-    preferredLyricSource: 'qq',
+    preferredLyricSource: 'spotify',
     lyricsOffsetMs: 0,
     lyrics: { spotify: true, netease: true, qq: true, kugou: true, lrclib: true },
     connectionFile: '',
@@ -36,7 +36,7 @@ const boolean = (value, fallback) => (typeof value === 'boolean' ? value : fallb
 const PREFERRED_SOURCES = ['qq', 'netease', 'kugou', 'spotify', 'lrclib'];
 const preferredOf = (value) => (typeof value === 'string' && PREFERRED_SOURCES.includes(value)
     ? value
-    : 'qq');
+    : 'spotify');
 /** Reads a file written by an older Spolyric: unknown keys are dropped, bad values fall back, nothing throws. */
 export function normalizeConfig(raw) {
     const source = raw && typeof raw === 'object' ? raw : {};

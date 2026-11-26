@@ -12,6 +12,7 @@ import { fromQq } from '../lyrics/qq.js';
 import { fromKugou } from '../lyrics/kugou.js';
 import { normalizeLrc } from '../lyrics/lrc.js';
 import { toSimplified } from '../lyrics/zh.js';
+import { searchSpotifyTrack } from './search.js';
 import type { NowPlayingTrack } from './types.js';
 
 export { normalizeLrc } from '../lyrics/lrc.js';
@@ -270,7 +271,7 @@ export function createLyricsResolver({
                 return null;
             }
 
-            const spotifyId = spotifyIdOf(track);
+            let spotifyId = spotifyIdOf(track);
             // Only when every source that could be asked has said "no lyrics" is that remembered;
             // one source being down must not hide a lyric the other one has.
             let asked = 0;
@@ -279,6 +280,13 @@ export function createLyricsResolver({
             for (const source of order) {
                 if (!enabled[source]) continue;
                 if (source === 'spotify') {
+                    if (!spotifyId) {
+                        try {
+                            spotifyId = await searchSpotifyTrack({ track, getToken, fetchImpl, timeoutMs, signal });
+                        } catch (error) {
+                            log.debug('Spotify search failed; no Spotify lyrics for this track', error);
+                        }
+                    }
                     if (!spotifyId) continue;
                     asked += 1;
                     try {

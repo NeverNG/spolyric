@@ -81,10 +81,10 @@ test('stage control can be turned off, and is on by default', () => {
     assert.equal(applyEnvironment(DEFAULT_CONFIG, { SPOLYRIC_CONTROL: 'on' }).control, true);
 });
 
-test('the preferred lyric source defaults to QQ, like Folia', () => {
-    assert.equal(normalizeConfig({}).preferredLyricSource, 'qq');
+test('the preferred lyric source defaults to Spotify, then falls back in Folia order', () => {
+    assert.equal(normalizeConfig({}).preferredLyricSource, 'spotify');
     assert.equal(normalizeConfig({ preferredLyricSource: 'kugou' }).preferredLyricSource, 'kugou');
-    assert.equal(normalizeConfig({ preferredLyricSource: 'bogus' }).preferredLyricSource, 'qq');
+    assert.equal(normalizeConfig({ preferredLyricSource: 'bogus' }).preferredLyricSource, 'spotify');
     assert.equal(applyEnvironment(DEFAULT_CONFIG, { SPOLYRIC_PREFER: 'netease' }).preferredLyricSource, 'netease');
 });
 

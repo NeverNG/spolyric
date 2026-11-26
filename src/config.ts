@@ -66,7 +66,7 @@ export const DEFAULT_CONFIG: SpolyricConfig = {
     emptyGraceMs: 20_000,
     seekThresholdMs: 1500,
     driftThresholdMs: 5000,
-    preferredLyricSource: 'qq',
+    preferredLyricSource: 'spotify',
     lyricsOffsetMs: 0,
     lyrics: { spotify: true, netease: true, qq: true, kugou: true, lrclib: true },
     connectionFile: '',
@@ -95,7 +95,7 @@ const PREFERRED_SOURCES = ['qq', 'netease', 'kugou', 'spotify', 'lrclib'] as con
 const preferredOf = (value: unknown): (typeof PREFERRED_SOURCES)[number] => (
     typeof value === 'string' && (PREFERRED_SOURCES as readonly string[]).includes(value)
         ? value as (typeof PREFERRED_SOURCES)[number]
-        : 'qq'
+        : 'spotify'
 );
 
 /** Reads a file written by an older Spolyric: unknown keys are dropped, bad values fall back, nothing throws. */

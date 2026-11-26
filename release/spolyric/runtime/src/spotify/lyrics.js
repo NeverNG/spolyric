@@ -10,6 +10,7 @@ import { fromQq } from '../lyrics/qq.js';
 import { fromKugou } from '../lyrics/kugou.js';
 import { normalizeLrc } from '../lyrics/lrc.js';
 import { toSimplified } from '../lyrics/zh.js';
+import { searchSpotifyTrack } from './search.js';
 export { normalizeLrc } from '../lyrics/lrc.js';
 /** The fallback order after the preferred source, as Folia's own registry orders them (the sources we have). */
 export const LYRIC_SOURCE_ORDER = ['netease', 'qq', 'kugou', 'spotify', 'lrclib'];
@@ -175,7 +176,7 @@ export function createLyricsResolver({ cache, enabled, preferred = 'qq', getToke
                 log.debug('lyrics: still none', { title: track.title });
                 return null;
             }
-            const spotifyId = spotifyIdOf(track);
+            let spotifyId = spotifyIdOf(track);
             // Only when every source that could be asked has said "no lyrics" is that remembered;
             // one source being down must not hide a lyric the other one has.
             let asked = 0;
@@ -185,6 +186,14 @@ export function createLyricsResolver({ cache, enabled, preferred = 'qq', getToke
                 if (!enabled[source])
                     continue;
                 if (source === 'spotify') {
+                    if (!spotifyId) {
+                        try {
+                            spotifyId = await searchSpotifyTrack({ track, getToken, fetchImpl, timeoutMs, signal });
+                        }
+                        catch (error) {
+                            log.debug('Spotify search failed; no Spotify lyrics for this track', error);
+                        }
+                    }
                     if (!spotifyId)
                         continue;
                     asked += 1;
