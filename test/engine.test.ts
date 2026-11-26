@@ -162,12 +162,60 @@ test('another track is a new session', async () => {
     assert.equal(stage.sessions[1]?.title, 'Shape of You');
 });
 
-test('an ad clears the stage at once, without waiting out the grace', async () => {
-    const { engine, stage, player } = setup();
+test('an ad keeps the song on the stage, without the words', async () => {
+    const { engine, stage, player, lyrics, clock, controlCalls } = setup();
+    lyrics.cached = { lrc: LRC, source: 'spotify' };
     await engine.tick();
+    assert.equal(stage.sessions[0]?.lyricSource?.lrcContent, LRC);
+    clock.advance(2000);
     player.set({ state: 'ad', deviceName: 'Phone' });
     await engine.tick();
-    assert.equal(stage.clears, 1);
+    assert.equal(stage.clears, 0, 'the stage is not cleared to Folia\'s "waiting for external input" card');
+    assert.equal(stage.sessions.length, 2);
+    assert.equal(stage.sessions[1]?.title, 'Never Gonna Give You Up', 'the song stays, not the ad');
+    assert.equal(stage.sessions[1]?.lyricSource, undefined, 'no words over the ad');
+    assert.equal(stage.sessions[1]?.positionMs, 2000);
+    assert.equal(engine.isFollowing(), true);
+    assert.equal(engine.snapshot().lyricsSource, null);
+    assert.deepEqual(controlCalls, [], 'an ad is not a pause press');
+});
+
+test('a second ad tick leaves the held stage alone', async () => {
+    const { engine, stage, player, clock } = setup();
+    await engine.tick();
+    clock.advance(1000);
+    player.set({ state: 'ad', deviceName: 'Phone' });
+    await engine.tick();
+    clock.advance(1500);
+    await engine.tick();
+    assert.equal(stage.sessions.length, 2);
+    assert.equal(stage.clocks.length, 0);
+});
+
+test('the song after an ad is sent again with its words and real position', async () => {
+    const { engine, stage, player, lyrics, clock } = setup();
+    lyrics.cached = { lrc: LRC, source: 'spotify' };
+    await engine.tick();
+    clock.advance(2000);
+    player.set({ state: 'ad', deviceName: 'Phone' });
+    await engine.tick();
+    // The ad runs for 30 s; the song resumes where it stopped, not where the ad's clock went.
+    clock.advance(30_000);
+    player.set(playingAt(clock.value, 2000));
+    await engine.tick();
+    assert.equal(stage.clears, 0);
+    assert.equal(stage.sessions.length, 3);
+    assert.equal(stage.sessions[2]?.positionMs, 2000);
+    assert.equal(stage.sessions[2]?.lyricSource?.lrcContent, LRC);
+    assert.equal(engine.snapshot().lyricsSource, 'spotify');
+    assert.equal(engine.isFollowing(), true);
+});
+
+test('an ad with nothing on the stage leaves the stage alone', async () => {
+    const { engine, stage, player } = setup();
+    player.set({ state: 'ad', deviceName: 'Phone' });
+    await engine.tick();
+    assert.equal(stage.calls.length, 0);
     assert.equal(engine.isFollowing(), false);
 });
 

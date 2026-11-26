@@ -162,6 +162,8 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
             track,
             sessionUpdatedAt,
             lyrics: cached,
+            lyricsOnStage: Boolean(cached?.lrc),
+            adHeld: false,
             anchorPositionMs: playing.positionMs,
             anchorAtMs: playing.sampledAtMs,
             paused: !playing.isPlaying,
@@ -199,6 +201,7 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
             return false;
         pendingLyrics = null;
         current.lyrics = result;
+        current.lyricsOnStage = true;
         current.sessionUpdatedAt = sessionUpdatedAt;
         current.anchorPositionMs = playing.positionMs;
         current.anchorAtMs = playing.sampledAtMs;
@@ -225,7 +228,8 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
         if (!result)
             return false;
         current.track.coverUrl = result.url;
-        const sessionUpdatedAt = await pushSession(current.track, playing.positionMs, current.paused, current.lyrics?.lrc ?? null);
+        const lrc = current.lyricsOnStage ? current.lyrics?.lrc ?? null : null;
+        const sessionUpdatedAt = await pushSession(current.track, playing.positionMs, current.paused, lrc);
         // `forget()` (a replaced connection) may have run while the push was in flight.
         if (session !== current)
             return false;
@@ -256,12 +260,67 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
                 return;
             }
         }
-        const sessionUpdatedAt = await pushSession(current.track, positionMs, paused, current.lyrics?.lrc ?? null);
+        const lrc = current.lyricsOnStage ? current.lyrics?.lrc ?? null : null;
+        const sessionUpdatedAt = await pushSession(current.track, positionMs, paused, lrc);
         current.sessionUpdatedAt = sessionUpdatedAt;
         current.anchorPositionMs = positionMs;
         current.anchorAtMs = sampledAtMs;
         current.paused = paused;
         current.lastClockAtMs = at;
+    };
+    /**
+     * An ad is not a song: instead of clearing the stage (Folia would show its "waiting for external
+     * input" card), keep the song that was there without its words, so Folia's lyrics animation runs
+     * on. The clock keeps going while the ad plays; the song's real position is pushed when it is back.
+     */
+    const holdForAd = async (at) => {
+        const current = session;
+        if (!current)
+            return;
+        // A real ad resets the idle grace: an "idle" tick in the middle of it must not clear the stage.
+        emptySince = null;
+        if (current.adHeld)
+            return;
+        const positionMs = positionAt(current, at);
+        if (dryRun) {
+            log.info('[dry-run] would keep the song on the stage without the words during the ad');
+            return;
+        }
+        const sessionUpdatedAt = await pushSession(current.track, positionMs, false, null);
+        // `forget()` (a replaced connection) may have run while the push was in flight.
+        if (session !== current)
+            return;
+        current.sessionUpdatedAt = sessionUpdatedAt;
+        current.anchorPositionMs = positionMs;
+        current.anchorAtMs = at;
+        current.paused = false;
+        current.lastClockAtMs = at;
+        current.lyricsOnStage = false;
+        current.adHeld = true;
+        log.info(`an ad is playing; ${current.track.title} stays on the stage without the words`);
+    };
+    /**
+     * The song is back after an ad: put it on the stage again with its words, at the position Spotify
+     * is actually at, instead of the position the ad's running clock left behind.
+     */
+    const resumeAfterAd = async (playing, at) => {
+        const current = session;
+        if (!current || !current.adHeld)
+            return false;
+        const lrc = current.lyrics?.lrc ?? null;
+        const sessionUpdatedAt = await pushSession(current.track, playing.positionMs, !playing.isPlaying, lrc);
+        // `forget()` (a replaced connection) may have run while the push was in flight.
+        if (session !== current)
+            return false;
+        current.sessionUpdatedAt = sessionUpdatedAt;
+        current.anchorPositionMs = playing.positionMs;
+        current.anchorAtMs = playing.sampledAtMs;
+        current.paused = !playing.isPlaying;
+        current.lastClockAtMs = at;
+        current.lyricsOnStage = Boolean(lrc);
+        current.adHeld = false;
+        log.info(`the ad is over; ${current.track.title} is back on the stage`, { lyrics: Boolean(lrc) });
+        return true;
     };
     /**
      * `sampledAtMs` is when the position was true (Spotify's answer time), `at` is when this tick looked:
@@ -474,12 +533,12 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
         session = null;
         return true;
     };
-    const handleEmpty = async (at, immediate) => {
+    const handleEmpty = async (at) => {
         if (!session)
             return;
         if (emptySince === null)
             emptySince = at;
-        if (!immediate && at - emptySince < emptyGraceMs)
+        if (at - emptySince < emptyGraceMs)
             return;
         if (await clearIfOurs())
             emptySince = null;
@@ -497,6 +556,11 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
             return;
         }
         const current = session;
+        // The song is back after an ad: the stage was left on it without the words.
+        if (current.adHeld) {
+            await resumeAfterAd(playing, at);
+            return;
+        }
         // Hear the stage bar first: a change there becomes a command for the player, and the clock must
         // not be pushed back over it in the same tick. Without a change, a disagreement is healed by
         // pushing Spotify's own state to the stage.
@@ -576,7 +640,7 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
             positionMs: playing ? playing.positionMs : (session ? positionAt(session, at) : 0),
             durationMs: playing?.track.durationMs ?? 0,
             sessionUpdatedAt: session?.sessionUpdatedAt ?? null,
-            lyricsSource: session?.lyrics?.source ?? null,
+            lyricsSource: session?.lyricsOnStage ? session.lyrics?.source ?? null : null,
             updatedAtMs: at,
         };
     };
@@ -600,7 +664,10 @@ export function createSyncEngine({ player, lyrics, stage, log, now = Date.now, c
                     remember(playing, at);
                 }
                 else {
-                    await handleEmpty(at, playing.state === 'ad');
+                    if (playing.state === 'ad')
+                        await holdForAd(at);
+                    else
+                        await handleEmpty(at);
                     remember(null, at);
                 }
             }
