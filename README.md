@@ -14,14 +14,14 @@ Spotify 播放中 ─────┤
                   Folia 舞台（舞台模式 · Stage API）
 ```
 
-当前版本 **0.1.12**，下载见 [Releases](https://github.com/NeverNG/spolyric/releases)。
+当前版本 **0.1.13**，下载见 [Releases](https://github.com/NeverNG/spolyric/releases)。
 
 ## 快速开始
 
 **装成 Folia 模组（推荐）**
 
 1. Folia → 设置 → 连接与集成 → 打开「舞台模式」，来源选 **Stage API**；
-2. Folia → 设置 → 模组 → 打开「社区模组」，把 [spolyric-0.1.12.zip](https://github.com/NeverNG/spolyric/releases/download/v0.1.12/spolyric-0.1.12.zip) 拖进面板，或把 `spolyric` 文件夹放进 `%APPDATA%\Folia\mods`；
+2. Folia → 设置 → 模组 → 打开「社区模组」，把 [spolyric-0.1.13.zip](https://github.com/NeverNG/spolyric/releases/download/v0.1.13/spolyric-0.1.13.zip) 拖进面板，或把 `spolyric` 文件夹放进 `%APPDATA%\Folia\mods`；
 3. 在模组列表里启用 Spolyric（会弹一次确认），再进入舞台。
 
 Spolyric 会启动独立的 Node 运行时，按 Folia 的规则属于「外部作品」：在 **Awesome-Folia** 登记（[登记内容](docs/awesome-folia.md)），从本仓库 Releases 安装，不经过 Folium 签名；问题也反馈到本仓库。
@@ -136,7 +136,7 @@ npm run mod      # 生成 dist-mod/spolyric/ 和 dist-mod/spolyric.zip
 
 ```powershell
 npm run build     # tsc → dist/
-npm test          # node:test，178 个用例
+npm test          # node:test，179 个用例
 npm run mod       # 打包成 Folia 模组
 npm run check     # build + test
 ```

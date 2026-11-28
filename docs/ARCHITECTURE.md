@@ -200,7 +200,7 @@ src/main.ts
 
 ## 9. 测试策略
 
-- `node:test`，编译后跑 `dist/test/*.test.js`（`npm test`，178 个用例）。
+- `node:test`，编译后跑 `dist/test/*.test.js`（`npm test`，179 个用例）。
 - 假件在 `test/helpers/fakes.ts`：假 Stage（记录会话/时钟/清空、可注入 409 与标题）、假播放器（可变快照）、假歌词（可 gate 住，模拟「歌词后到」）、手动时钟。
 - 纯函数单测：PKCE、LRC 生成/校验、条目归一化、配置夹取、路径发现、连接文件解析（含 JSON `null` / 数组）、代理解析、SMTC 输出行解析。
 - 协议单测：`src/folia/stage.ts`、`src/spotify/player.ts`、`src/http.ts` 跑在真的 loopback HTTP 服务上（`test/helpers/server.ts`），检查方法、Authorization、请求体、错误码、标题解析、403 回退、错误正文里的 Spotify 原话。
@@ -251,6 +251,6 @@ spolyric/
 3. 把 stdout/stderr 按行转给 `api.log`；
 4. `api.onDispose` 和 `process 'exit'` 时 `child.kill()`。
 
-单实例：`acquireRunLock(dataDir)` 在 `runCommand` 里写 `%APPDATA%\Spolyric\run.lock`（PID + 时间），进程不在了就接管，活着就返回 null（这次不启动）。这样「Folia 模组拉起的」和「终端手动跑的」不会同时往舞台推。
+单实例：`acquireRunLock(dataDir)` 在 `runCommand` 里写 `%APPDATA%\Spolyric\run.lock`（PID + 时间），每 5 秒 touch 一次；PID 不在了、或者活着但 30 秒没有心跳，都接管（Windows 会复用 PID，旧锁可能指向 svchost）。这样「Folia 模组拉起的」和「终端手动跑的」不会同时往舞台推。
 
 模组面板里能看到日志；禁用模组即停止。Spolyric 会启动独立运行时，按 Folia 的规则属于「外部作品」：在 Awesome-Folia 登记，从 GitHub Releases 安装，不经过 Folium 签名；未签名的社区模组启用时会确认一次，功能不受影响。

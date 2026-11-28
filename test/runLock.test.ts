@@ -38,6 +38,23 @@ test('a lock left by a process that is gone is replaced', () => {
     }
 });
 
+test('a live PID reused by another process does not block a new run', () => {
+    const temp = makeTempDir();
+    try {
+        // Windows reuses PIDs: this lock points at a process that exists (the test runner), but the
+        // heartbeat is long gone, so the old owner is really dead.
+        const filePath = path.join(temp.dir, 'run.lock');
+        fs.writeFileSync(filePath, JSON.stringify({ pid: process.ppid, startedAt: 1 }));
+        const old = new Date(Date.now() - 60_000);
+        fs.utimesSync(filePath, old, old);
+        const lock = acquireRunLock(temp.dir);
+        assert.ok(lock, 'an old heartbeat is stale even when the PID is alive');
+        lock.release();
+    } finally {
+        temp.cleanup();
+    }
+});
+
 test('a release never removes a lock that belongs to another process', () => {
     const temp = makeTempDir();
     try {
