@@ -15,9 +15,15 @@ const spotifyLyrics = (body: string) => JSON.stringify({
     },
 });
 
-const resolverFor = (dir: string, base: string, enabled = { spotify: true, netease: false, qq: false, kugou: false, lrclib: true }) => createLyricsResolver({
+const resolverFor = (
+    dir: string,
+    base: string,
+    enabled = { spotify: true, netease: false, qq: false, kugou: false, lrclib: true },
+    preferred: 'spotify' | 'qq' | 'netease' | 'kugou' | 'lrclib' = 'spotify',
+) => createLyricsResolver({
     cache: createLyricsCache(dir),
     enabled,
+    preferred,
     getToken: async () => 'token',
     neteaseBase: base,
     lrclibBase: base,
@@ -150,6 +156,51 @@ test('disabled sources are not asked and nothing is remembered', async () => {
         assert.equal(server.requests.length, 0);
         const enabledLater = resolverFor(temp.dir, server.baseUrl);
         assert.equal((await enabledLater.get(track()))?.source, 'lrclib');
+    } finally {
+        await server.close();
+        temp.cleanup();
+    }
+});
+
+test('a catalogue lyric cached before sign-in is upgraded to Spotify\'s original text', async () => {
+    const temp = makeTempDir();
+    const server = await startTestServer(request => {
+        if (request.url?.startsWith('/color-lyrics')) return { text: spotifyLyrics('繁體原字\n第二行') };
+        if (request.url?.startsWith('/api/get')) return { json: { syncedLyrics: '[00:00.00]简体歌词\n[00:01.00]第二行' } };
+        return { status: 404, json: { code: 404 } };
+    });
+    try {
+        // Before signing in, only LRCLIB can be asked; its simplified words are what gets cached.
+        const before = resolverFor(temp.dir, server.baseUrl, { spotify: false, netease: false, qq: false, kugou: false, lrclib: true });
+        assert.equal((await before.get(track()))?.source, 'lrclib');
+        // After signing in, the cached fallback must not hide Spotify's own (traditional) text.
+        const after = resolverFor(temp.dir, server.baseUrl);
+        assert.equal(after.peek(track()), null, 'the cached fallback is not pushed before Spotify is asked');
+        const upgraded = await after.get(track());
+        assert.equal(upgraded?.source, 'spotify');
+        assert.match(upgraded?.lrc ?? '', /繁體原字/);
+        assert.equal(after.peek(track())?.source, 'spotify', 'the upgrade is cached');
+    } finally {
+        await server.close();
+        temp.cleanup();
+    }
+});
+
+test('when Spotify has no lyrics the cached fallback is kept and Spotify is not asked again', async () => {
+    const temp = makeTempDir();
+    const server = await startTestServer(request => {
+        if (request.url?.startsWith('/color-lyrics')) return { status: 404, json: { code: 404 } };
+        if (request.url?.startsWith('/api/get')) return { json: { syncedLyrics: '[00:00.00]简体歌词\n[00:01.00]第二行' } };
+        return { status: 404, json: { code: 404 } };
+    });
+    try {
+        const before = resolverFor(temp.dir, server.baseUrl, { spotify: false, netease: false, qq: false, kugou: false, lrclib: true });
+        assert.equal((await before.get(track()))?.source, 'lrclib');
+        const after = resolverFor(temp.dir, server.baseUrl);
+        assert.equal((await after.get(track()))?.source, 'lrclib', 'the fallback stays when Spotify has no words');
+        const requests = server.requests.length;
+        assert.equal((await after.get(track()))?.source, 'lrclib');
+        assert.equal(server.requests.length, requests, 'Spotify is not retried on every play after saying no');
     } finally {
         await server.close();
         temp.cleanup();

@@ -154,22 +154,36 @@ async function fromLrclib({ track, base, fetchImpl, timeoutMs, log, signal, }) {
     return { lrc: scored[0]?.lrc ?? null, definitive: true };
 }
 export function createLyricsResolver({ cache, enabled, preferred = 'qq', getToken, lrclibBase, neteaseBase, spotifyLyricsBase, fetchImpl = fetch, log, timeoutMs = 8000, signal, }) {
-    const fresh = (track) => {
+    const freshEntry = (track) => {
         const cached = cache.read(cacheKeyOf(track));
         if (!cached || cached.source === 'none')
             return null;
         if (Date.now() - cached.fetchedAtMs >= HIT_TTL_MS)
             return null;
-        return { lrc: cached.lrc, source: cached.source };
+        return cached;
     };
+    /**
+     * A fallback cached before Spotify could be asked (no sign-in yet, or an older cache): the words
+     * on disk are the catalogue's, often simplified. Let Spotify supply its own original text first.
+     */
+    const spotifyUpgradeWanted = (cached) => (enabled.spotify
+        && preferred === 'spotify'
+        && cached.source !== 'spotify'
+        && !cached.spotifyTried);
     return {
-        peek: fresh,
+        peek: (track) => {
+            const cached = freshEntry(track);
+            if (!cached || spotifyUpgradeWanted(cached))
+                return null;
+            return { lrc: cached.lrc, source: cached.source };
+        },
         async get(track) {
             const key = cacheKeyOf(track);
-            const cached = fresh(track);
-            if (cached) {
-                log.debug(`lyrics: cached from ${cached.source}`, { title: track.title });
-                return cached;
+            const stored = freshEntry(track);
+            const upgrading = Boolean(stored && spotifyUpgradeWanted(stored));
+            if (stored && !upgrading) {
+                log.debug(`lyrics: cached from ${stored.source}`, { title: track.title });
+                return { lrc: stored.lrc, source: stored.source };
             }
             const known = cache.read(key);
             if (known && known.source === 'none' && Date.now() - known.fetchedAtMs < MISS_TTL_MS) {
@@ -177,6 +191,9 @@ export function createLyricsResolver({ cache, enabled, preferred = 'qq', getToke
                 return null;
             }
             let spotifyId = spotifyIdOf(track);
+            // Whether Spotify was actually asked this run: only then is the fallback marked, so a
+            // failed request is retried on the next play instead of being remembered.
+            let spotifyAsked = false;
             // Only when every source that could be asked has said "no lyrics" is that remembered;
             // one source being down must not hide a lyric the other one has.
             let asked = 0;
@@ -208,8 +225,10 @@ export function createLyricsResolver({ cache, enabled, preferred = 'qq', getToke
                         });
                         if (answer.definitive)
                             answeredNone += 1;
+                        if (answer.lrc || answer.definitive)
+                            spotifyAsked = true;
                         if (answer.lrc) {
-                            cache.write({ key, source, lrc: answer.lrc, fetchedAtMs: Date.now() });
+                            cache.write({ key, source, lrc: answer.lrc, fetchedAtMs: Date.now(), spotifyTried: true });
                             log.info(`lyrics: ${SOURCE_LABEL[source]}`, { title: track.title, lines: answer.lrc.split('\n').length });
                             return { lrc: answer.lrc, source };
                         }
@@ -233,7 +252,13 @@ export function createLyricsResolver({ cache, enabled, preferred = 'qq', getToke
                     if (answer.definitive)
                         answeredNone += 1;
                     if (answer.lrc) {
-                        cache.write({ key, source, lrc: answer.lrc, fetchedAtMs: Date.now() });
+                        cache.write({
+                            key,
+                            source,
+                            lrc: answer.lrc,
+                            fetchedAtMs: Date.now(),
+                            ...(spotifyAsked ? { spotifyTried: true } : {}),
+                        });
                         log.info(`lyrics: ${SOURCE_LABEL[source]}`, { title: track.title, lines: answer.lrc.split('\n').length });
                         return { lrc: answer.lrc, source };
                     }
@@ -241,6 +266,17 @@ export function createLyricsResolver({ cache, enabled, preferred = 'qq', getToke
                 catch (error) {
                     log.debug(`${source} lyrics failed`, error);
                 }
+            }
+            // Spotify had nothing better (or could not be asked): the fallback already on disk is
+            // still the best answer, so keep it instead of dropping lyrics the stage was showing.
+            if (upgrading && stored) {
+                if (spotifyAsked)
+                    cache.write({ ...stored, spotifyTried: true });
+                log.info('lyrics: keeping the cached words; Spotify had nothing better', {
+                    title: track.title,
+                    source: stored.source,
+                });
+                return { lrc: stored.lrc, source: stored.source };
             }
             // Nothing was asked, so nothing is remembered: turning a source on later still finds the words.
             if (asked === 0)
@@ -251,7 +287,13 @@ export function createLyricsResolver({ cache, enabled, preferred = 'qq', getToke
                 log.info('lyrics: no complete answer from the sources just now; will try again next time', { title: track.title });
                 return null;
             }
-            cache.write({ key, source: 'none', lrc: '', fetchedAtMs: Date.now() });
+            cache.write({
+                key,
+                source: 'none',
+                lrc: '',
+                fetchedAtMs: Date.now(),
+                ...(spotifyAsked ? { spotifyTried: true } : {}),
+            });
             log.info('lyrics: none found; the stage shows the track alone', { title: track.title });
             return null;
         },
