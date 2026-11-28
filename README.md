@@ -24,7 +24,7 @@ Spotify 播放中 ─────┤
 2. Folia → 设置 → 模组 → 打开「社区模组」，把 [spolyric-0.1.12.zip](https://github.com/NeverNG/spolyric/releases/download/v0.1.12/spolyric-0.1.12.zip) 拖进面板，或把 `spolyric` 文件夹放进 `%APPDATA%\Folia\mods`；
 3. 在模组列表里启用 Spolyric（会弹一次确认），再进入舞台。
 
-Spolyric 会启动独立的 Node 运行时，按 Folia 的规则属于「外部作品」：在 **Awesome-Folia** 登记，从本仓库 Releases 安装，不经过 Folium 签名；问题也反馈到本仓库。
+Spolyric 会启动独立的 Node 运行时，按 Folia 的规则属于「外部作品」：在 **Awesome-Folia** 登记（[登记内容](docs/awesome-folia.md)），从本仓库 Releases 安装，不经过 Folium 签名；问题也反馈到本仓库。
 
 Windows + Spotify 桌面端在放即可。免费账号不需要登录 Spotify，也不需要会员。
 
