@@ -24,10 +24,12 @@ module.exports = function activate(api) {
         return;
     }
 
-    // `SPOLYRIC_MOD_ARGS` lets a developer change the child's arguments (for example "--dry-run --once").
-    const args = (process.env.SPOLYRIC_MOD_ARGS || 'run').trim().split(/\s+/).filter(Boolean);
-    // `SPOLYRIC_NODE` lets a user point at a real node.exe if Folia's executable refuses to act as Node.
-    const executable = process.env.SPOLYRIC_NODE || process.execPath;
+    // The release runs exactly one command, the same `run` the CLI uses by hand. There is no
+    // environment override for the executable or the arguments: a follower that can be pointed at
+    // another binary is a different kind of tool, and the external-work review asked for the fixed
+    // shape.
+    const args = ['run'];
+    const executable = process.execPath;
     let child;
     try {
         child = spawn(executable, [entry, ...args], {

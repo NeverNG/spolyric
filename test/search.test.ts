@@ -13,7 +13,7 @@ const track = {
     coverUrl: null,
 };
 
-test('the Spotify search asks with the original title before the simplified one', async () => {
+test('the Spotify search finds the id for a local track', async () => {
     let seen = '';
     const id = await searchSpotifyTrack({
         track,
@@ -21,31 +21,12 @@ test('the Spotify search asks with the original title before the simplified one'
         fetchImpl: (async (url: string | URL | Request) => {
             seen = decodeURIComponent(String(url));
             return new Response(JSON.stringify({
-                tracks: { items: [{ id: 'spotify-id', name: '白樺林', artists: [{ name: '朴樹' }], duration_ms: 227_000 }] },
+                tracks: { items: [{ id: 'spotify-id', name: '白桦林', artists: [{ name: '朴树' }], duration_ms: 227_000 }] },
             }), { status: 200 });
         }) as unknown as typeof fetch,
     });
     assert.equal(id, 'spotify-id');
-    assert.ok(seen.includes('白樺林'), 'the original (traditional) title is asked first');
-});
-
-test('a search with the original title that finds nothing falls back to simplified', async () => {
-    const queries: string[] = [];
-    const id = await searchSpotifyTrack({
-        track,
-        getToken: async () => 'token',
-        fetchImpl: (async (url: string | URL | Request) => {
-            const query = decodeURIComponent(String(url));
-            queries.push(query);
-            const items = queries.length === 1
-                ? []
-                : [{ id: 'spotify-id', name: '白桦林', artists: [{ name: '朴树' }], duration_ms: 227_000 }];
-            return new Response(JSON.stringify({ tracks: { items } }), { status: 200 });
-        }) as unknown as typeof fetch,
-    });
-    assert.equal(id, 'spotify-id');
-    assert.ok(queries[0]?.includes('白樺林'), 'the original title is tried first');
-    assert.ok(queries[1]?.includes('白桦林'), 'the simplified title is the fallback');
+    assert.ok(seen.includes('白桦林'), 'the query uses simplified characters');
 });
 
 test('a search hit by another artist is not accepted', async () => {

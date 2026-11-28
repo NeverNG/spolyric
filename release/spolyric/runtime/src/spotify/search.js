@@ -11,33 +11,21 @@ import { toSimplified } from '../lyrics/zh.js';
 export async function searchSpotifyTrack({ track, getToken, fetchImpl = fetch, timeoutMs = 6000, signal, }) {
     if (!track.title)
         return null;
-    const queryFor = (simplify) => {
-        const title = simplify ? toSimplified(track.title) : track.title;
-        const artist = simplify ? toSimplified(track.artists[0] ?? '') : track.artists[0] ?? '';
-        return track.artists.length > 0 ? `track:${title} artist:${artist}` : title;
-    };
-    // The original title first: for a traditional-Chinese song it is the release whose Spotify
-    // lyrics use the original characters. Only when that finds nothing, ask with simplified text.
-    const queries = [queryFor(false)];
-    const simplified = queryFor(true);
-    if (simplified !== queries[0])
-        queries.push(simplified);
+    const query = track.artists.length > 0
+        ? `track:${toSimplified(track.title)} artist:${toSimplified(track.artists[0] ?? '')}`
+        : toSimplified(track.title);
     const token = await getToken();
-    for (const query of queries) {
-        const answer = await fetchJson(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=8`, {
-            headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-            timeoutMs,
-            signal,
-        }, fetchImpl);
-        const items = answer.body?.tracks?.items ?? [];
-        const best = pickBest(items, track, item => ({
-            title: typeof item.name === 'string' ? item.name : '',
-            artist: (item.artists ?? []).map(artist => (typeof artist.name === 'string' ? artist.name : '')).filter(Boolean).join(' / '),
-            durationMs: Math.round(Number(item.duration_ms) || 0),
-        }));
-        if (best && typeof best.id === 'string')
-            return best.id;
-    }
-    return null;
+    const answer = await fetchJson(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=8`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        timeoutMs,
+        signal,
+    }, fetchImpl);
+    const items = answer.body?.tracks?.items ?? [];
+    const best = pickBest(items, track, item => ({
+        title: typeof item.name === 'string' ? item.name : '',
+        artist: (item.artists ?? []).map(artist => (typeof artist.name === 'string' ? artist.name : '')).filter(Boolean).join(' / '),
+        durationMs: Math.round(Number(item.duration_ms) || 0),
+    }));
+    return best && typeof best.id === 'string' ? best.id : null;
 }
 //# sourceMappingURL=search.js.map

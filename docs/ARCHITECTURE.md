@@ -71,7 +71,7 @@ run()
 
 `tick()` 是**唯一的推送出口**：所有 stage 请求都在一次 tick 内串行发生。这样引擎可以被测试用手动时钟逐帧驱动，也不会出现两个并发推送互相覆盖 `sessionUpdatedAt`。
 
-歌词查询的顺序是「首选源 → 网易云 → QQ → 酷狗 → Spotify → LRCLIB」，首选源默认 `spotify`（有登录 token 时），没有 token 时会跳过；本地播放会用 `src/spotify/search.ts` 在 Spotify 搜索里把标题/歌手换成 track id（先按原文搜，找不到再用简体），再取 `color-lyrics`。但 Spotify 对**应用 owner 免费**的 token 连 `/search` 和 `color-lyrics` 都回 403，所以免费账号实际只会落到目录源；目录源通常是简体。查询与打分前会用 `src/lyrics/zh.ts` 的 OpenCC 表把繁体转成简体，否则 Spotify 的 `白樺林 / 朴樹` 对不上大陆曲库的 `白桦林 / 朴树`，会被误判成“没有歌词”并缓存 6 小时。
+歌词查询的顺序是「首选源 → 网易云 → QQ → 酷狗 → Spotify → LRCLIB」，首选源默认 `spotify`（有登录 token 时），没有 token 时会跳过；本地播放会用 `src/spotify/search.ts` 在 Spotify 搜索里把标题/歌手换成 track id，再取 `color-lyrics`。但 Spotify 对**应用 owner 免费**的 token 连 `/search` 和 `color-lyrics` 都回 403，所以免费账号实际只会落到目录源；目录源通常是简体。查询与打分前会用 `src/lyrics/zh.ts` 的 OpenCC 表把繁体转成简体，否则 Spotify 的 `白樺林 / 朴樹` 对不上大陆曲库的 `白桦林 / 朴树`，会被误判成“没有歌词”并缓存 6 小时。
 
 ## 4. 会话与时钟
 
@@ -200,7 +200,7 @@ src/main.ts
 
 ## 9. 测试策略
 
-- `node:test`，编译后跑 `dist/test/*.test.js`（`npm test`，173 个用例）。
+- `node:test`，编译后跑 `dist/test/*.test.js`（`npm test`，178 个用例）。
 - 假件在 `test/helpers/fakes.ts`：假 Stage（记录会话/时钟/清空、可注入 409 与标题）、假播放器（可变快照）、假歌词（可 gate 住，模拟「歌词后到」）、手动时钟。
 - 纯函数单测：PKCE、LRC 生成/校验、条目归一化、配置夹取、路径发现、连接文件解析（含 JSON `null` / 数组）、代理解析、SMTC 输出行解析。
 - 协议单测：`src/folia/stage.ts`、`src/spotify/player.ts`、`src/http.ts` 跑在真的 loopback HTTP 服务上（`test/helpers/server.ts`），检查方法、Authorization、请求体、错误码、标题解析、403 回退、错误正文里的 Spotify 原话。
@@ -247,10 +247,10 @@ spolyric/
 `main.cjs` 在 `activate(api)` 里：
 
 1. 检查 `runtime/src/main.js` 存在；
-2. 用 `process.execPath` + `ELECTRON_RUN_AS_NODE=1` spawn 子进程（Folia 的 exe 本身就是 Electron/Node），参数默认 `run`，可用 `SPOLYRIC_MOD_ARGS` 覆盖；如果用户的 Folia 不肯以 Node 方式运行，可用 `SPOLYRIC_NODE` 指到一个 `node.exe`；
+2. 用 `process.execPath` + `ELECTRON_RUN_AS_NODE=1` spawn 子进程（Folia 的 exe 本身就是 Electron/Node），参数固定为 `run`；发布版不提供改可执行文件或参数的入口；
 3. 把 stdout/stderr 按行转给 `api.log`；
 4. `api.onDispose` 和 `process 'exit'` 时 `child.kill()`。
 
 单实例：`acquireRunLock(dataDir)` 在 `runCommand` 里写 `%APPDATA%\Spolyric\run.lock`（PID + 时间），进程不在了就接管，活着就返回 null（这次不启动）。这样「Folia 模组拉起的」和「终端手动跑的」不会同时往舞台推。
 
-模组面板里能看到日志；禁用模组即停止。Folia 的签名只是标识，未签名的社区模组启用时会确认一次，功能不受影响。
+模组面板里能看到日志；禁用模组即停止。Spolyric 会启动独立运行时，按 Folia 的规则属于「外部作品」：在 Awesome-Folia 登记，从 GitHub Releases 安装，不经过 Folium 签名；未签名的社区模组启用时会确认一次，功能不受影响。

@@ -19,8 +19,12 @@ const runtimeDir = path.join(modDir, 'runtime');
 fs.rmSync(outRoot, { recursive: true, force: true });
 fs.mkdirSync(runtimeDir, { recursive: true });
 
-// The daemon: the compiled build plus the two PowerShell scripts, which sit beside their compiled files.
-fs.cpSync(path.join(root, 'dist', 'src'), path.join(runtimeDir, 'src'), { recursive: true });
+// The daemon: the compiled build plus the two PowerShell scripts, which sit beside their compiled
+// files. Source maps are for development only; the release carries just the JavaScript.
+fs.cpSync(path.join(root, 'dist', 'src'), path.join(runtimeDir, 'src'), {
+    recursive: true,
+    filter: source => !source.endsWith('.map'),
+});
 fs.writeFileSync(
     path.join(runtimeDir, 'package.json'),
     `${JSON.stringify({ private: true, type: 'module' }, null, 2)}\n`,
@@ -78,8 +82,8 @@ fs.writeFileSync(path.join(modDir, 'README.md'), [
     "",
     "## 功能",
     "",
-    "- **歌词**：首选源默认 QQ（和 Folia 一样），顺序是 QQ → 网易云 → 酷狗 → Spotify → LRCLIB，第一个匹配就用（匹配前会做繁体转简体）；",
-    "  可以用命令行 `--prefer` 改首选源。匹配不到就不放歌词，不编造。",
+    "- **歌词**：Spotify 官方歌词要求应用 owner 有 Premium（免费账号登录后 Spotify 仍会 403）；免费账号实际用 网易云 / QQ / 酷狗 / LRCLIB，通常是简体。",
+    "  第一个匹配就用，`--prefer` 可改首选源；匹配不到就不放歌词，不编造。",
     "- **封面**：按标题 + 歌手 + 时长在 iTunes / QQ 音乐 / Deezer 匹配，下载后由本机的 loopback 服务提供给 Folia；匹配不到就不放。",
     "- **播放控制**：舞台的播放/暂停和进度条会作用到 Spotify；进度条两端另有 `⏮` / `⏭` 两个按钮",
     "  （Folia 在舞台上下文里关掉了它自带的上一首/下一首）。",
@@ -89,7 +93,7 @@ fs.writeFileSync(path.join(modDir, 'README.md'), [
     "## 安装",
     "",
     "1. Folia → 设置 → 模组，打开「社区模组」；",
-    "2. 在模组市场点安装，或把 `spolyric` 文件夹放进 `%APPDATA%\\Folia\\mods`（也可以把 zip 拖到模组面板）；",
+    "2. 从 GitHub Releases 下载 `spolyric` 的 zip 拖进模组面板，或把 `spolyric` 文件夹放进 `%APPDATA%\\Folia\\mods`；",
     "3. 在模组列表里启用 Spolyric（会弹一次确认）。",
     "",
     "之后每次启动 Folia 都会自动拉起 Spolyric；禁用模组或退出 Folia 时它随之停止。",
@@ -121,7 +125,7 @@ fs.writeFileSync(path.join(modDir, 'README.md'), [
     "",
     "## 仓库与反馈",
     "",
-    "源码与问题反馈见仓库主页；发行版由维护者签名后上架模组市场。",
+    "Spolyric 会启动独立运行时，属于 Folia 的「外部作品」：在 Awesome-Folia 登记，从 GitHub Releases 安装，不经过 Folium 签名；源码与问题反馈见仓库主页。",
     ""
 ].join('\n'));
 

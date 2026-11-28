@@ -88,8 +88,6 @@ export function createLyricsCache(directory) {
 }
 const HIT_TTL_MS = 30 * 24 * 3600_000;
 const MISS_TTL_MS = 6 * 3600_000;
-/** How long a catalogue lyric is trusted before Spotify is tried again for its original text. */
-const SPOTIFY_RETRY_MS = 6 * 3600_000;
 const spotifyIdOf = (track) => (track.kind === 'track' && /^[0-9A-Za-z]{22}$/.test(track.id) ? track.id : null);
 async function fromSpotify({ trackId, getToken, fetchImpl, timeoutMs, base, signal, }) {
     const token = await getToken();
@@ -156,49 +154,29 @@ async function fromLrclib({ track, base, fetchImpl, timeoutMs, log, signal, }) {
     return { lrc: scored[0]?.lrc ?? null, definitive: true };
 }
 export function createLyricsResolver({ cache, enabled, preferred = 'qq', getToken, lrclibBase, neteaseBase, spotifyLyricsBase, fetchImpl = fetch, log, timeoutMs = 8000, signal, }) {
-    const freshEntry = (track) => {
+    const fresh = (track) => {
         const cached = cache.read(cacheKeyOf(track));
         if (!cached || cached.source === 'none')
             return null;
         if (Date.now() - cached.fetchedAtMs >= HIT_TTL_MS)
             return null;
-        return cached;
+        return { lrc: cached.lrc, source: cached.source };
     };
-    /**
-     * A fallback cached before Spotify could be asked (no sign-in yet, or an older cache): the words
-     * on disk are the catalogue's, often simplified. Let Spotify supply its own original text first.
-     */
-    const spotifyUpgradeWanted = (cached) => (enabled.spotify
-        && preferred === 'spotify'
-        && cached.source !== 'spotify'
-        && (cached.spotifyTriedAt === undefined || Date.now() - cached.spotifyTriedAt >= SPOTIFY_RETRY_MS));
     return {
-        peek: (track) => {
-            const cached = freshEntry(track);
-            if (!cached || spotifyUpgradeWanted(cached))
-                return null;
-            return { lrc: cached.lrc, source: cached.source };
-        },
+        peek: fresh,
         async get(track) {
             const key = cacheKeyOf(track);
-            const stored = freshEntry(track);
-            const upgrading = Boolean(stored && spotifyUpgradeWanted(stored));
-            if (stored && !upgrading) {
-                log.debug(`lyrics: cached from ${stored.source}`, { title: track.title });
-                return { lrc: stored.lrc, source: stored.source };
+            const cached = fresh(track);
+            if (cached) {
+                log.debug(`lyrics: cached from ${cached.source}`, { title: track.title });
+                return cached;
             }
             const known = cache.read(key);
-            const noneSettled = Boolean(known && known.source === 'none' && Date.now() - known.fetchedAtMs < MISS_TTL_MS);
-            // A "none" remembered while Spotify could not be asked is not settled: after the retry
-            // window it asks Spotify again.
-            if (noneSettled && known && !spotifyUpgradeWanted(known)) {
+            if (known && known.source === 'none' && Date.now() - known.fetchedAtMs < MISS_TTL_MS) {
                 log.debug('lyrics: still none', { title: track.title });
                 return null;
             }
             let spotifyId = spotifyIdOf(track);
-            // Whether Spotify was actually attempted this run (even a refused search counts): the
-            // fallback is then stamped, so a free account's 403 is not retried on every play.
-            let spotifyAttempted = false;
             // Only when every source that could be asked has said "no lyrics" is that remembered;
             // one source being down must not hide a lyric the other one has.
             let asked = 0;
@@ -208,7 +186,6 @@ export function createLyricsResolver({ cache, enabled, preferred = 'qq', getToke
                 if (!enabled[source])
                     continue;
                 if (source === 'spotify') {
-                    spotifyAttempted = true;
                     if (!spotifyId) {
                         try {
                             spotifyId = await searchSpotifyTrack({ track, getToken, fetchImpl, timeoutMs, signal });
@@ -256,13 +233,7 @@ export function createLyricsResolver({ cache, enabled, preferred = 'qq', getToke
                     if (answer.definitive)
                         answeredNone += 1;
                     if (answer.lrc) {
-                        cache.write({
-                            key,
-                            source,
-                            lrc: answer.lrc,
-                            fetchedAtMs: Date.now(),
-                            ...(spotifyAttempted ? { spotifyTriedAt: Date.now() } : {}),
-                        });
+                        cache.write({ key, source, lrc: answer.lrc, fetchedAtMs: Date.now() });
                         log.info(`lyrics: ${SOURCE_LABEL[source]}`, { title: track.title, lines: answer.lrc.split('\n').length });
                         return { lrc: answer.lrc, source };
                     }
@@ -270,17 +241,6 @@ export function createLyricsResolver({ cache, enabled, preferred = 'qq', getToke
                 catch (error) {
                     log.debug(`${source} lyrics failed`, error);
                 }
-            }
-            // Spotify had nothing better (or could not be asked): the fallback already on disk is
-            // still the best answer, so keep it instead of dropping lyrics the stage was showing.
-            if (upgrading && stored) {
-                if (spotifyAttempted)
-                    cache.write({ ...stored, spotifyTriedAt: Date.now() });
-                log.info('lyrics: keeping the cached words; Spotify had nothing better', {
-                    title: track.title,
-                    source: stored.source,
-                });
-                return { lrc: stored.lrc, source: stored.source };
             }
             // Nothing was asked, so nothing is remembered: turning a source on later still finds the words.
             if (asked === 0)
@@ -291,13 +251,7 @@ export function createLyricsResolver({ cache, enabled, preferred = 'qq', getToke
                 log.info('lyrics: no complete answer from the sources just now; will try again next time', { title: track.title });
                 return null;
             }
-            cache.write({
-                key,
-                source: 'none',
-                lrc: '',
-                fetchedAtMs: Date.now(),
-                ...(spotifyAttempted ? { spotifyTriedAt: Date.now() } : {}),
-            });
+            cache.write({ key, source: 'none', lrc: '', fetchedAtMs: Date.now() });
             log.info('lyrics: none found; the stage shows the track alone', { title: track.title });
             return null;
         },
