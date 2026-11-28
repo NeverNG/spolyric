@@ -71,7 +71,7 @@ run()
 
 `tick()` 是**唯一的推送出口**：所有 stage 请求都在一次 tick 内串行发生。这样引擎可以被测试用手动时钟逐帧驱动，也不会出现两个并发推送互相覆盖 `sessionUpdatedAt`。
 
-歌词查询的顺序是「首选源 → 网易云 → QQ → 酷狗 → Spotify → LRCLIB」，首选源默认 `spotify`（有登录 token 时），没有 token 时会跳过；本地播放会用 `src/spotify/search.ts` 在 Spotify 搜索里把标题/歌手换成 track id，再取 `color-lyrics`。查询与打分前会用 `src/lyrics/zh.ts` 的 OpenCC 表把繁体转成简体，否则 Spotify 的 `白樺林 / 朴樹` 对不上大陆曲库的 `白桦林 / 朴树`，会被误判成“没有歌词”并缓存 6 小时。
+歌词查询的顺序是「首选源 → 网易云 → QQ → 酷狗 → Spotify → LRCLIB」，首选源默认 `spotify`（有登录 token 时），没有 token 时会跳过；本地播放会用 `src/spotify/search.ts` 在 Spotify 搜索里把标题/歌手换成 track id（先按原文搜，找不到再用简体），再取 `color-lyrics`。但 Spotify 对**应用 owner 免费**的 token 连 `/search` 和 `color-lyrics` 都回 403，所以免费账号实际只会落到目录源；目录源通常是简体。查询与打分前会用 `src/lyrics/zh.ts` 的 OpenCC 表把繁体转成简体，否则 Spotify 的 `白樺林 / 朴樹` 对不上大陆曲库的 `白桦林 / 朴树`，会被误判成“没有歌词”并缓存 6 小时。
 
 ## 4. 会话与时钟
 

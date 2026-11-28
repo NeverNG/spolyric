@@ -103,10 +103,11 @@ type CacheEntry = {
     lrc: string;
     fetchedAtMs: number;
     /**
-     * A catalogue lyric cached before Spotify could be asked (or before this version). It is kept,
-     * but the next play gives Spotify one chance to supply its original characters first.
+     * When Spotify was last tried for this entry. A catalogue lyric cached before Spotify could be
+     * asked is retried after this, but not on every play (a free account's 403 would otherwise cost
+     * a search request on each play).
      */
-    spotifyTried?: boolean;
+    spotifyTriedAt?: number;
 };
 
 /** A cache entry that carries lyrics from a real source (never the remembered "none"). */
@@ -142,6 +143,8 @@ export function createLyricsCache(directory: string): LyricsCache {
 
 const HIT_TTL_MS = 30 * 24 * 3600_000;
 const MISS_TTL_MS = 6 * 3600_000;
+/** How long a catalogue lyric is trusted before Spotify is tried again for its original text. */
+const SPOTIFY_RETRY_MS = 6 * 3600_000;
 
 const spotifyIdOf = (track: NowPlayingTrack): string | null => (
     track.kind === 'track' && /^[0-9A-Za-z]{22}$/.test(track.id) ? track.id : null
@@ -276,7 +279,7 @@ export function createLyricsResolver({
         enabled.spotify
         && preferred === 'spotify'
         && cached.source !== 'spotify'
-        && !cached.spotifyTried
+        && (cached.spotifyTriedAt === undefined || Date.now() - cached.spotifyTriedAt >= SPOTIFY_RETRY_MS)
     );
 
     return {
@@ -295,15 +298,18 @@ export function createLyricsResolver({
                 return { lrc: stored.lrc, source: stored.source };
             }
             const known = cache.read(key);
-            if (known && known.source === 'none' && Date.now() - known.fetchedAtMs < MISS_TTL_MS) {
+            const noneSettled = Boolean(known && known.source === 'none' && Date.now() - known.fetchedAtMs < MISS_TTL_MS);
+            // A "none" remembered while Spotify could not be asked is not settled: after the retry
+            // window it asks Spotify again.
+            if (noneSettled && known && !spotifyUpgradeWanted(known)) {
                 log.debug('lyrics: still none', { title: track.title });
                 return null;
             }
 
             let spotifyId = spotifyIdOf(track);
-            // Whether Spotify was actually asked this run: only then is the fallback marked, so a
-            // failed request is retried on the next play instead of being remembered.
-            let spotifyAsked = false;
+            // Whether Spotify was actually attempted this run (even a refused search counts): the
+            // fallback is then stamped, so a free account's 403 is not retried on every play.
+            let spotifyAttempted = false;
             // Only when every source that could be asked has said "no lyrics" is that remembered;
             // one source being down must not hide a lyric the other one has.
             let asked = 0;
@@ -312,6 +318,7 @@ export function createLyricsResolver({
             for (const source of order) {
                 if (!enabled[source]) continue;
                 if (source === 'spotify') {
+                    spotifyAttempted = true;
                     if (!spotifyId) {
                         try {
                             spotifyId = await searchSpotifyTrack({ track, getToken, fetchImpl, timeoutMs, signal });
@@ -331,9 +338,8 @@ export function createLyricsResolver({
                             signal,
                         });
                         if (answer.definitive) answeredNone += 1;
-                        if (answer.lrc || answer.definitive) spotifyAsked = true;
                         if (answer.lrc) {
-                            cache.write({ key, source, lrc: answer.lrc, fetchedAtMs: Date.now(), spotifyTried: true });
+                            cache.write({ key, source, lrc: answer.lrc, fetchedAtMs: Date.now() });
                             log.info(`lyrics: ${SOURCE_LABEL[source]}`, { title: track.title, lines: answer.lrc.split('\n').length });
                             return { lrc: answer.lrc, source };
                         }
@@ -359,7 +365,7 @@ export function createLyricsResolver({
                             source,
                             lrc: answer.lrc,
                             fetchedAtMs: Date.now(),
-                            ...(spotifyAsked ? { spotifyTried: true } : {}),
+                            ...(spotifyAttempted ? { spotifyTriedAt: Date.now() } : {}),
                         });
                         log.info(`lyrics: ${SOURCE_LABEL[source]}`, { title: track.title, lines: answer.lrc.split('\n').length });
                         return { lrc: answer.lrc, source };
@@ -372,7 +378,7 @@ export function createLyricsResolver({
             // Spotify had nothing better (or could not be asked): the fallback already on disk is
             // still the best answer, so keep it instead of dropping lyrics the stage was showing.
             if (upgrading && stored) {
-                if (spotifyAsked) cache.write({ ...stored, spotifyTried: true });
+                if (spotifyAttempted) cache.write({ ...stored, spotifyTriedAt: Date.now() });
                 log.info('lyrics: keeping the cached words; Spotify had nothing better', {
                     title: track.title,
                     source: stored.source,
@@ -393,7 +399,7 @@ export function createLyricsResolver({
                 source: 'none',
                 lrc: '',
                 fetchedAtMs: Date.now(),
-                ...(spotifyAsked ? { spotifyTried: true } : {}),
+                ...(spotifyAttempted ? { spotifyTriedAt: Date.now() } : {}),
             });
             log.info('lyrics: none found; the stage shows the track alone', { title: track.title });
             return null;

@@ -14,14 +14,14 @@ Spotify 播放中 ─────┤
                   Folia 舞台（舞台模式 · Stage API）
 ```
 
-当前版本 **0.1.10**，下载见 [Releases](https://github.com/NeverNG/spolyric/releases)。
+当前版本 **0.1.11**，下载见 [Releases](https://github.com/NeverNG/spolyric/releases)。
 
 ## 快速开始
 
 **装成 Folia 模组（推荐）**
 
 1. Folia → 设置 → 连接与集成 → 打开「舞台模式」，来源选 **Stage API**；
-2. Folia → 设置 → 模组 → 打开「社区模组」，把 [spolyric-0.1.10.zip](https://github.com/NeverNG/spolyric/releases/download/v0.1.10/spolyric-0.1.10.zip) 拖进面板，或把 `spolyric` 文件夹放进 `%APPDATA%\Folia\mods`；
+2. Folia → 设置 → 模组 → 打开「社区模组」，把 [spolyric-0.1.11.zip](https://github.com/NeverNG/spolyric/releases/download/v0.1.11/spolyric-0.1.11.zip) 拖进面板，或把 `spolyric` 文件夹放进 `%APPDATA%\Folia\mods`；
 3. 在模组列表里启用 Spolyric（会弹一次确认），再进入舞台。
 
 Windows + Spotify 桌面端在放即可。免费账号不需要登录 Spotify，也不需要会员。
@@ -58,7 +58,7 @@ npm run build
 ## 功能
 
 - **封面**：`local` 先用 Spotify 自己的媒体会话缩略图，拿不到再按标题 / 歌手 / 时长在 iTunes、QQ 音乐、酷狗、Deezer 匹配；`web` 直接用 Spotify 封面。封面由本机 `127.0.0.1` 的只读服务提供给 Folia（Stage API 只收 http(s) 地址）。
-- **歌词**：登录后优先 Spotify 官方歌词（本地播放会先用 Spotify 搜索换成 track id：先按原文搜，找不到再用简体搜），再按 网易云 → QQ → 酷狗 → LRCLIB 回退；`--prefer` 改首选源；繁转简只用于搜索/匹配，不改歌词原文。**不登录时只能用目录源，可能是简体**；要 Spotify 的原字歌词，先 `spolyric login`。所有来源都没有就只显示曲目，不编造。
+- **歌词**：Spotify 官方歌词要求**应用 owner 有 Premium**——免费账号即使登录，Spotify 的 Web API / 歌词接口仍会 403，只能用目录源（网易云 / QQ / 酷狗 / LRCLIB，通常是简体）。能满足时优先 Spotify 原文：本地播放会先用 Spotify 搜索换成 track id（先按原文搜，找不到再用简体搜），拿到原文就替换之前缓存的目录歌词；`--prefer` 改首选源；繁转简只用于搜索/匹配，不改歌词原文。所有来源都没有就只显示曲目，不编造。
 - **广告**：按标题 / 歌手 / 时长识别（例如「無廣告收聽音樂。」）。广告期间不清空舞台、不显示广告信息，保留当前歌曲的封面和标题；进度条按广告自己的时长从 0 读秒，Folia 的视觉动画约 2 秒后继续，广告结束后按歌曲真实位置接回歌词。识别偶尔会漏，漏掉时按普通曲目处理。
 - **控制**（仅 `local`）：舞台的播放 / 暂停 / 拖动会作用到 Spotify。上一首 / 下一首用模组进度条两端的 `⏮` / `⏭`、快捷键 `Ctrl+Alt+←` / `Ctrl+Alt+→` / `Ctrl+Alt+空格`，或 `spolyric key next|prev|play-pause`。`web` 模式只读，不会动别的设备。
 - **时间同步**：每 0.5 秒采样；暂停 / 继续和超过 1.5 秒的拖动立刻校时；小漂移交给 Folia 自己外推；切歌用新会话；停止播放等 20 秒才清空舞台。
@@ -100,7 +100,7 @@ Node 的 `fetch` 不读系统代理，Spolyric 自己按顺序找：
 | 舞台没反应 | 确认「舞台模式」已开、来源是 **Stage API**，并进入舞台；`spolyric status` 会写明缺哪一步 |
 | `还没有读到 Folia 的 Stage 连接文件` | 同上；`status` 会列出查过的路径 |
 | `local` 模式一直「没有在播放」 | Spotify 桌面端要在放（不是手机），且 SMTC 当前会话是 Spotify |
-| Folia 显示简体，Spotify 里是繁体 | 没登录 Spotify 时走的是网易云 / QQ 的简体歌词。`spolyric login --client-id <ID>` 后重启 Folia；0.1.10 起会优先 Spotify 原文，并替换之前缓存的简体歌词 |
+| Folia 显示简体，Spotify 里是繁体 | Spotify 官方歌词要求应用 owner 有 Premium；免费账号登录也会 403，显示的是网易云 / QQ 的简体歌词。有 Premium 账号时用它新建 Spotify 应用并 `spolyric login`，0.1.11 起会优先 Spotify 原文并替换之前缓存的歌词 |
 | 舞台按钮没反应 | 只在 `local` 模式有效；`web` 不动别的设备；日志里应有「Folia 的暂停键 → Spotify 已暂停」 |
 | `login` 超时或端口被占 | Redirect URI 要和日志里一字不差；9888 被占时用 `--port 9899` 并同步改应用里的地址 |
 

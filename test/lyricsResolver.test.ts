@@ -206,3 +206,23 @@ test('when Spotify has no lyrics the cached fallback is kept and Spotify is not 
         temp.cleanup();
     }
 });
+
+test('a refused Spotify request is not retried on every play', async () => {
+    const temp = makeTempDir();
+    const server = await startTestServer(request => {
+        // A free app owner gets 403 from Spotify's lyrics endpoint; the catalogue still answers.
+        if (request.url?.startsWith('/color-lyrics')) return { status: 403, json: { error: { status: 403 } } };
+        if (request.url?.startsWith('/api/get')) return { json: { syncedLyrics: '[00:00.00]简体歌词\n[00:01.00]第二行' } };
+        return { status: 404, json: { code: 404 } };
+    });
+    try {
+        const resolver = resolverFor(temp.dir, server.baseUrl);
+        assert.equal((await resolver.get(track()))?.source, 'lrclib');
+        const requests = server.requests.length;
+        assert.equal((await resolver.get(track()))?.source, 'lrclib');
+        assert.equal(server.requests.length, requests, 'the refused Spotify attempt is remembered for a while');
+    } finally {
+        await server.close();
+        temp.cleanup();
+    }
+});
